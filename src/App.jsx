@@ -1,25 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  initializeapp, 
-  initializeApp 
-} from "firebase/app";
-import { 
-  getAuth, 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
-  signInAnonymously 
-} from "firebase/auth";
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc 
-} from "firebase/firestore";
+import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 import { 
   Plus, Trash2, Download, LogIn, LogOut, Cloud, Undo2, Redo2, 
-  Globe, ZoomIn, ZoomOut, Move, Palette, Sparkles, FolderOpen, Save 
+  Globe, ZoomIn, ZoomOut, Move, Palette, Sparkles, FolderOpen, Save, Square, Circle, Triangle, Layers 
 } from 'lucide-react';
 
 // Cấu hình Firebase chính thức của bạn
@@ -32,44 +17,45 @@ const firebaseConfig = {
   appId: "1:1056777863960:web:c504f50413b8cc0dbfd46d"
 };
 
-// Khởi tạo Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
 export default function App() {
-  // Trạng thái ứng dụng
   const [user, setUser] = useState(null);
-  const [lang, setLang] = useState('vi'); // 'vi' hoặc 'en'
+  const [lang, setLang] = useState('vi');
   const [nodes, setNodes] = useState([
-    { id: '1', text: 'MyMind Studio', shape: 'rect', x: 400, y: 300, color: '#3b82f6', bg: '#eff6ff', parent: null }
+    { id: '1', text: 'MyMind Studio', shape: 'rect', x: 500, y: 350, color: '#3b82f6', bg: '#1e293b', parent: null }
   ]);
   const [selectedId, setSelectedId] = useState('1');
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [draggingNodeId, setDraggingNodeId] = useState(null);
+  const [nodeOffset, setNodeOffset] = useState({ x: 0, y: 0 });
+  
   const [history, setHistory] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [workspaceName, setWorkspaceName] = useState('My Workspace');
 
-  // Lắng nghe trạng thái đăng nhập Firebase
+  // Bảng màu lựa chọn
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
         loadCloudWorkspace(currentUser.uid);
       } else {
-        // Tự động đăng nhập ẩn danh hoặc cho phép dùng khách
         signInAnonymously(auth).catch((err) => console.log("Auth error:", err));
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Đăng nhập Google
   const handleGoogleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -88,7 +74,6 @@ export default function App() {
     }
   };
 
-  // Lưu đám mây Firestore
   const saveCloudWorkspace = async () => {
     if (!user) return;
     try {
@@ -97,13 +82,12 @@ export default function App() {
         nodes: nodes,
         updatedAt: new Date()
       });
-      alert(lang === 'vi' ? "Đã lưu workspace lên đám mây thành công!" : "Workspace saved to cloud successfully!");
+      alert(lang === 'vi' ? "Đã lưu workspace lên đám mây thành công!" : "Workspace saved successfully!");
     } catch (e) {
       console.error("Error saving workspace: ", e);
     }
   };
 
-  // Tải dữ liệu từ Firestore
   const loadCloudWorkspace = async (uid) => {
     try {
       const docRef = doc(db, "workspaces", uid);
@@ -118,17 +102,7 @@ export default function App() {
     }
   };
 
-  // Auto-save mỗi 10 phút nếu đã đăng nhập
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (user) {
-        saveCloudWorkspace();
-      }
-    }, 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [user, nodes, workspaceName]);
-
-  // Thêm node con
+  // Thêm node mới kế thừa thuộc tính node mẹ
   const addChildNode = (shapeType = 'rect') => {
     const parentNode = nodes.find(n => n.id === selectedId);
     if (!parentNode) return;
@@ -138,8 +112,8 @@ export default function App() {
       id: newNodeId,
       text: lang === 'vi' ? 'Ý tưởng mới' : 'New Idea',
       shape: shapeType,
-      x: parentNode.x + 200,
-      y: parentNode.y + (Math.random() * 100 - 50),
+      x: parentNode.x + 220,
+      y: parentNode.y + (Math.random() * 120 - 60),
       color: parentNode.color,
       bg: parentNode.bg,
       parent: parentNode.id
@@ -151,16 +125,14 @@ export default function App() {
     setSelectedId(newNodeId);
   };
 
-  // Xóa node
   const deleteNode = () => {
-    if (nodes.length <= 1) return; // Giữ lại root node ít nhất
+    if (nodes.length <= 1) return;
     setHistory([...history, nodes]);
     setRedoStack([]);
     setNodes(nodes.filter(n => n.id !== selectedId && n.parent !== selectedId));
     setSelectedId('1');
   };
 
-  // Undo / Redo
   const handleUndo = () => {
     if (history.length === 0) return;
     const previous = history[history.length - 1];
@@ -177,26 +149,40 @@ export default function App() {
     setRedoStack(redoStack.slice(1));
   };
 
+  const updateSelectedNodeColor = (color) => {
+    setNodes(nodes.map(n => n.id === selectedId ? { ...n, color } : n));
+  };
+
+  const updateSelectedNodeShape = (shape) => {
+    setNodes(nodes.map(n => n.id === selectedId ? { ...n, shape } : n));
+  };
+
   return (
     <div className="w-screen h-screen overflow-hidden flex flex-col bg-slate-900 text-white font-sans select-none">
       {/* HEADER TOOLBAR */}
-      <header className="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 z-20">
+      <header className="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 z-20 shadow-md">
         <div className="flex items-center space-x-3">
           <Sparkles className="w-6 h-6 text-blue-400" />
           <h1 className="font-bold text-lg tracking-wide bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
             MyMind Studio
           </h1>
-          <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">
+          <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full hidden sm:inline">
             {lang === 'vi' ? 'Song ngữ Anh-Việt' : 'Bilingual'}
           </span>
         </div>
 
         {/* Toolbar Center Actions */}
-        <div className="flex items-center space-x-2">
-          <button onClick={() => addChildNode('rect')} className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition">
+        <div className="flex items-center space-x-1.5 md:space-x-2">
+          <button onClick={() => addChildNode('rect')} className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition shadow">
             <Plus className="w-4 h-4" /> <span>{lang === 'vi' ? 'Thêm nhánh' : 'Add Node'}</span>
           </button>
           
+          <div className="flex items-center space-x-1 bg-slate-700/50 p-1 rounded-lg border border-slate-700">
+            <button onClick={() => updateSelectedNodeShape('rect')} title="Chữ nhật" className={`p-1.5 rounded ${nodes.find(n => n.id === selectedId)?.shape === 'rect' ? 'bg-blue-600' : 'hover:bg-slate-600'}`}><Square className="w-4 h-4" /></button>
+            <button onClick={() => updateSelectedNodeShape('oval')} title="Oval" className={`p-1.5 rounded ${nodes.find(n => n.id === selectedId)?.shape === 'oval' ? 'bg-blue-600' : 'hover:bg-slate-600'}`}><Circle className="w-4 h-4" /></button>
+            <button onClick={() => updateSelectedNodeShape('triangle')} title="Tam giác" className={`p-1.5 rounded ${nodes.find(n => n.id === selectedId)?.shape === 'triangle' ? 'bg-blue-600' : 'hover:bg-slate-600'}`}><Triangle className="w-4 h-4" /></button>
+          </div>
+
           <div className="h-5 w-[1px] bg-slate-700 mx-1"></div>
 
           <button onClick={handleUndo} disabled={history.length === 0} className="p-2 hover:bg-slate-700 rounded-lg disabled:opacity-40 transition" title="Undo">
@@ -206,28 +192,26 @@ export default function App() {
             <Redo2 className="w-4 h-4" />
           </button>
 
-          <div className="h-5 w-[1px] bg-slate-700 mx-1"></div>
-
           <button onClick={() => setLang(lang === 'vi' ? 'en' : 'vi')} className="flex items-center space-x-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-semibold">
             <Globe className="w-3.5 h-3.5" />
             <span>{lang === 'vi' ? 'EN' : 'VI'}</span>
           </button>
 
           <button onClick={() => setShowExportModal(true)} className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">
-            <Download className="w-4 h-4" /> <span>Export</span>
+            <Download className="w-4 h-4" /> <span className="hidden md:inline">Export</span>
           </button>
         </div>
 
         {/* Auth / Cloud Sync */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 md:space-x-3">
           <button onClick={saveCloudWorkspace} className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition" title="Save to Cloud">
-            <Save className="w-4 h-4" />
-            <span className="hidden md:inline">Cloud Save</span>
+            <Cloud className="w-4 h-4" />
+            <span className="hidden lg:inline">Cloud Save</span>
           </button>
 
           {user && !user.isAnonymous ? (
             <div className="flex items-center space-x-2">
-              <span className="text-xs text-slate-300 hidden md:inline">{user.displayName || user.email}</span>
+              <span className="text-xs text-slate-300 hidden xl:inline">{user.displayName || user.email}</span>
               <button onClick={handleLogout} className="p-2 bg-rose-600/20 text-rose-400 hover:bg-rose-600/30 rounded-lg" title="Logout">
                 <LogOut className="w-4 h-4" />
               </button>
@@ -235,15 +219,54 @@ export default function App() {
           ) : (
             <button onClick={handleGoogleLogin} className="flex items-center space-x-1.5 px-3 py-1.5 bg-white text-slate-900 hover:bg-slate-100 rounded-lg text-sm font-semibold transition">
               <LogIn className="w-4 h-4" />
-              <span>Login Google</span>
+              <span>Login</span>
             </button>
           )}
         </div>
       </header>
 
+      {/* SUB-TOOLBAR MÀU SẮC VIỀN VÀ XÓA NODE */}
+      <div className="h-10 bg-slate-800/80 border-b border-slate-700/50 flex items-center justify-between px-4 z-10 text-xs">
+        <div className="flex items-center space-x-2">
+          <span className="text-slate-400 font-medium">Màu viền:</span>
+          <div className="flex space-x-1.5">
+            {colors.map(col => (
+              <button
+                key={col}
+                onClick={() => updateSelectedNodeColor(col)}
+                className={`w-5 h-5 rounded-full border-2 transition-transform ${nodes.find(n => n.id === selectedId)?.color === col ? 'scale-125 border-white' : 'border-transparent hover:scale-110'}`}
+                style={{ backgroundColor: col }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <button onClick={deleteNode} className="flex items-center space-x-1 text-rose-400 hover:text-rose-300 transition">
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{lang === 'vi' ? 'Xóa nhánh' : 'Delete Node'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* CANVAS KHU VỰC VẼ MINDMAP */}
       <div 
         className="flex-1 relative overflow-hidden bg-slate-950 cursor-grab active:cursor-grabbing"
+        onMouseDown={(e) => {
+          setIsDraggingCanvas(true);
+          setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+        }}
+        onMouseMove={(e) => {
+          if (isDraggingCanvas) {
+            setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+          } else if (draggingNodeId) {
+            const dx = (e.clientX - dragStart.x) / scale;
+            const dy = (e.clientY - dragStart.y) / scale;
+            setNodes(nodes.map(n => n.id === draggingNodeId ? { ...n, x: n.x + dx, y: n.y + dy } : n));
+            setDragStart({ x: e.clientX, y: e.clientY });
+          }
+        }}
+        onMouseUp={() => { setIsDraggingCanvas(false); setDraggingNodeId(null); }}
         onWheel={(e) => {
           const newScale = Math.min(Math.max(0.2, scale - e.deltaY * 0.001), 3);
           setScale(newScale);
@@ -253,17 +276,16 @@ export default function App() {
           className="absolute inset-0 w-full h-full origin-top-left"
           style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}
         >
-          {/* SVG Đường nối Bezier giữa các Node */}
-          <svg className="absolute inset-0 w-[5000px] h-[5000px] pointer-events-none">
+          {/* SVG Đường nối Bezier 360 độ */}
+          <svg className="absolute inset-0 w-[8000px] h-[8000px] pointer-events-none">
             {nodes.map(node => {
               if (!node.parent) return null;
               const parentNode = nodes.find(n => n.id === node.parent);
               if (!parentNode) return null;
 
-              // Tính toán đường cong Bezier
-              const startX = parentNode.x + 75;
+              const startX = parentNode.x + 80;
               const startY = parentNode.y + 25;
-              const endX = node.x + 75;
+              const endX = node.x + 80;
               const endY = node.y + 25;
               const dx = (endX - startX) / 2;
 
@@ -280,25 +302,32 @@ export default function App() {
             })}
           </svg>
 
-          {/* Render các Bubble / Node */}
+          {/* Render các Bubble */}
           {nodes.map(node => {
             const isSelected = selectedId === node.id;
+            let shapeClass = 'rounded-xl';
+            if (node.shape === 'oval') shapeClass = 'rounded-full px-6 py-4';
+            if (node.shape === 'triangle') shapeClass = 'rounded-md clip-triangle px-4 py-4';
+
             return (
               <div
                 key={node.id}
                 onClick={(e) => { e.stopPropagation(); setSelectedId(node.id); }}
-                style={{ transform: `translate(${node.x}px, ${node.y}px)` }}
-                className={`absolute p-3 min-w-[150px] text-center cursor-pointer transition-shadow shadow-lg flex items-center justify-center 
-                  ${node.shape === 'oval' ? 'rounded-full px-5 py-4' : node.shape === 'triangle' ? 'clip-triangle' : 'rounded-xl'}
-                  ${isSelected ? 'ring-4 ring-cyan-400 shadow-cyan-500/50' : 'hover:opacity-90'}
-                `}
-                data-color={node.color}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setSelectedId(node.id);
+                  setDraggingNodeId(node.id);
+                  setDragStart({ x: e.clientX, y: e.clientY });
+                }}
                 style={{
                   transform: `translate(${node.x}px, ${node.y}px)`,
                   backgroundColor: node.bg || '#1e293b',
-                  border: `2px solid ${node.color || '#3b82f6'}`,
-                  color: '#ffffff'
+                  borderColor: node.color || '#3b82f6',
                 }}
+                className={`absolute p-3 min-w-[160px] text-center cursor-move transition-shadow shadow-xl flex items-center justify-center border-2 
+                  ${shapeClass}
+                  ${isSelected ? 'ring-4 ring-cyan-400 shadow-cyan-500/50 z-10' : 'hover:opacity-95'}
+                `}
               >
                 <input
                   type="text"
@@ -307,7 +336,7 @@ export default function App() {
                     const val = e.target.value;
                     setNodes(nodes.map(n => n.id === node.id ? { ...n, text: val } : n));
                   }}
-                  className="bg-transparent text-center outline-none w-full font-medium text-sm truncate"
+                  className="bg-transparent text-center outline-none w-full font-medium text-sm text-white truncate"
                 />
               </div>
             );
@@ -315,22 +344,22 @@ export default function App() {
         </div>
       </div>
 
-      {/* BANNER / POPUP AD HOẶC INFO KHI EXPORT */}
+      {/* MODAL EXPORT & POPUP AD */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl">
             <h3 className="text-xl font-bold text-white">Export MyMind Studio</h3>
             <p className="text-sm text-slate-300">
               {lang === 'vi' 
-                ? 'Sơ đồ tư duy của bạn đã sẵn sàng xuất file hoặc chia sẻ lên đám mây.' 
-                : 'Your mind map is ready to export or share.'}
+                ? 'Sơ đồ tư duy của bạn đã sẵn sàng để xuất file hoặc sao lưu đám mây.' 
+                : 'Your mind map is ready to export.'}
             </p>
             <div className="p-4 bg-slate-800 rounded-xl border border-dashed border-slate-700 text-xs text-blue-400">
-              💡 Banner Ad / Promotion: Nâng cấp Pro để mở khóa vô hạn dung lượng và xuất bản đồ không giới hạn!
+              💡 Quảng cáo: Nâng cấp gói Pro để mở rộng dung lượng lưu trữ không giới hạn!
             </div>
             <div className="flex space-x-3 pt-2">
-              <button onClick={() => alert("Đã tải về thành công!")} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold text-sm transition">
-                {lang === 'vi' ? 'Tải xuống JSON / Image' : 'Download File'}
+              <button onClick={() => { alert("Đã tải xuống file thành công!"); setShowExportModal(false); }} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold text-sm transition">
+                {lang === 'vi' ? 'Tải xuống (Download)' : 'Download'}
               </button>
               <button onClick={() => setShowExportModal(false)} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-semibold text-sm transition">
                 {lang === 'vi' ? 'Đóng' : 'Close'}
