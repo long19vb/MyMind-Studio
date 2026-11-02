@@ -14,6 +14,10 @@ import {
   Square,
   Triangle,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  GitBranch,
   Cloud,
   Check,
   X,
@@ -30,7 +34,8 @@ import {
   Redo2,
   Clock,
   Lock,
-  FolderPlus
+  FolderPlus,
+  AlertCircle
 } from 'lucide-react';
 
 // Optional Firebase imports with safe fallback
@@ -41,7 +46,8 @@ import {
   signInWithCustomToken,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  signOut
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -95,7 +101,15 @@ const TRANSLATIONS = {
     save: 'Save',
     loginBtn: 'Log In',
     logoutBtn: 'Log Out',
-    googleLoginBtn: 'Sign in with Google',
+    googleLoginBtn: 'Sign in with Google Popup',
+    loginModalTitle: 'Sign In with Google Account',
+    loginPopupBlockedTitle: 'Google Popup Blocked or Domain Not Authorized',
+    loginPopupBlockedDesc: 'In embedded preview environments (or if your domain is not yet added to Firebase Console -> Authentication -> Authorized Domains), Google blocks the OAuth popup window.',
+    loginCustomAccountTitle: 'Sign in with your personal Google info (Preview / Local):',
+    loginNamePlaceholder: 'Your Full Name (e.g. Alex Nguyen)',
+    loginEmailPlaceholder: 'your.email@gmail.com',
+    loginContinueWithInfo: 'Sign In with This Account',
+    loginRetryPopup: 'Retry Official Google Popup',
     loginRequiredTitle: 'Sign In to Sync Cloud Workspaces',
     loginRequiredDesc: 'Sign in with your Google account to save multiple workspaces to the cloud and access them anywhere. You can still rename your active workspace above or continue working offline.',
     continueWithoutLogin: 'Close & Continue Offline',
@@ -130,9 +144,19 @@ const TRANSLATIONS = {
     inputChildPlaceholder: (lvl, parentText) => `Add child idea (Lvl ${lvl}) for "${parentText}"...`,
     clearSelectionTitle: 'Deselect to create Level 1 idea',
     hierarchyTitle: 'Hierarchy Tree',
-    hierarchyHint: '*Select a parent node to automatically arrange children radially:',
-    rootLevelOption: '(Root Lvl 1)',
-    parentPrefix: 'Parent:',
+    hierarchyHint: '*Use ←/→ (Shift+Tab / Tab) to Promote/Demote level, or drag nodes to change parent:',
+    dropRootZoneText: 'Drop here to make Root (Level 1)',
+    promoteBtnTitle: 'Promote Level (Shift+Tab) - Move up 1 level',
+    demoteBtnTitle: 'Demote Level (Tab) - Make child of previous sibling',
+    promoteBtnLabel: 'Promote (←)',
+    demoteBtnLabel: 'Demote (→)',
+    hierarchySectionLabel: 'Hierarchy Level (PowerPoint Style):',
+    currentParentInfoLabel: 'Current Parent:',
+    dragReparentHint: 'Drag nodes in the Hierarchy Tree (left) or hold Alt while dragging on the board to change parent.',
+    canvasDropReparentLabel: 'Canvas Drop-to-Reparent Mode',
+    canvasDropReparentHint: 'When active (or holding Alt while dragging on canvas), dropping a node onto another node makes it a child branch.',
+    dropTargetBadge: 'Drop to attach as child!',
+    rootLevelOption: 'Root (Level 1)',
     deleteBubbleTitle: 'Delete idea node (promote children)',
     bubblePropsTitle: 'Idea Node Properties',
     linePropsTitle: 'Connection Line Properties',
@@ -175,14 +199,18 @@ const TRANSLATIONS = {
     formatJpg: 'JPG Image',
     formatPdf: 'PDF Document',
     confirmDownload: 'Download File',
-    connectModeBanner: 'Drag to target node or tap another node to connect',
+    connectModeBanner: 'Drag to target node or tap another node to connect (keeps current levels)',
     cancelConnect: 'Cancel',
     toastLineDeleted: 'Connection line deleted!',
     toastBubbleDeleted: 'Idea node deleted and child nodes promoted!',
     toastBubbleAdded: (lvl) => `New idea node added (Level ${lvl})!`,
-    toastReparented: 'Branch moved and arranged radially!',
+    toastReparented: 'Updated parent branch & hierarchy levels!',
+    toastPromoted: (lvl) => `Promoted node to Level ${lvl}!`,
+    toastDemoted: (lvl) => `Demoted node to Level ${lvl}!`,
+    toastCannotPromote: 'Already at Root Level 1!',
+    toastCannotDemote: 'No preceding node above to demote under!',
     toastCentered: 'Mindmap centered in view!',
-    toastConnected: 'Nodes connected!',
+    toastConnected: 'Nodes connected (levels preserved)!',
     toastSavedLocal: 'Workspace saved to browser storage!',
     toastSavedCloud: 'Workspace synced to cloud!',
     toastSaveError: 'Failed to save workspace: ',
@@ -222,7 +250,15 @@ const TRANSLATIONS = {
     save: 'Lưu trữ',
     loginBtn: 'Đăng nhập',
     logoutBtn: 'Đăng xuất',
-    googleLoginBtn: 'Đăng nhập với Google',
+    googleLoginBtn: 'Đăng nhập qua cửa sổ Google',
+    loginModalTitle: 'Đăng Nhập Tài Khoản Google',
+    loginPopupBlockedTitle: 'Cửa sổ Google Popup bị chặn hoặc Tên miền chưa cấp quyền',
+    loginPopupBlockedDesc: 'Trong môi trường khung xem trước nhúng (hoặc khi tên miền web chưa được thêm vào Firebase Console -> Authentication -> Authorized Domains), trình duyệt sẽ chặn cửa sổ Popup của Google.',
+    loginCustomAccountTitle: 'Nhập tài khoản Google cá nhân của bạn (Dùng cho bản Preview / Local):',
+    loginNamePlaceholder: 'Họ và tên của bạn (VD: Nguyễn Văn A)',
+    loginEmailPlaceholder: 'email.cua.ban@gmail.com',
+    loginContinueWithInfo: 'Đăng Nhập Bằng Tài Khoản Này',
+    loginRetryPopup: 'Thử mở lại Google Popup',
     loginRequiredTitle: 'Đăng Nhập Để Đồng Bộ Đám Mây',
     loginRequiredDesc: 'Đăng nhập tài khoản Google để lưu trữ nhiều Không gian làm việc lên đám mây và mở lại mọi lúc. Bạn vẫn có thể đổi tên Không gian làm việc hiện tại ở khung phía trên hoặc tiếp tục vẽ trực tiếp.',
     continueWithoutLogin: 'Đóng & Tiếp tục không cần lưu',
@@ -257,9 +293,19 @@ const TRANSLATIONS = {
     inputChildPlaceholder: (lvl, parentText) => `Thêm ý tưởng con (Cấp ${lvl}) cho "${parentText}"...`,
     clearSelectionTitle: 'Bỏ chọn để tạo ý tưởng Cấp 1',
     hierarchyTitle: 'Cây Phân Cấp Ý Tưởng',
-    hierarchyHint: '*Chọn nhánh mẹ mới để tự động xếp tỏa tròn quanh ô mẹ:',
-    rootLevelOption: '(Gốc Cấp 1)',
-    parentPrefix: 'Mẹ:',
+    hierarchyHint: '*Bấm ←/→ (Shift+Tab / Tab) để Đôn/Hạ cấp, hoặc kéo thả để đổi nhánh mẹ:',
+    dropRootZoneText: 'Thả vào đây để đưa về Gốc (Cấp 1)',
+    promoteBtnTitle: 'Đôn lên 1 cấp (Shift+Tab) - Giống PowerPoint Promote',
+    demoteBtnTitle: 'Hạ xuống 1 cấp (Tab) - Giống PowerPoint Demote',
+    promoteBtnLabel: 'Đôn cấp (←)',
+    demoteBtnLabel: 'Hạ cấp (→)',
+    hierarchySectionLabel: 'Thay Đổi Cấp Độ (Kiểu PowerPoint):',
+    currentParentInfoLabel: 'Nhánh mẹ hiện tại:',
+    dragReparentHint: 'Kéo thả các dòng trong Cây phân cấp (bên trái) hoặc giữ phím Alt khi kéo ô trên bảng vẽ để đổi nhánh mẹ.',
+    canvasDropReparentLabel: 'Chế độ Kéo Thả Đè Gắn Nhánh Mẹ',
+    canvasDropReparentHint: 'Khi bật (hoặc giữ phím Alt lúc kéo ô trên bảng vẽ), thả đè một ô lên ô khác sẽ tự động gắn làm nhánh con.',
+    dropTargetBadge: 'Thả để gắn làm nhánh con!',
+    rootLevelOption: 'Gốc (Cấp 1)',
     deleteBubbleTitle: 'Xóa ô ý tưởng (đôn cấp nhánh con)',
     bubblePropsTitle: 'Thuộc Tính Ô Ý Tưởng',
     linePropsTitle: 'Thuộc Tính Đường Nối',
@@ -302,14 +348,18 @@ const TRANSLATIONS = {
     formatJpg: 'Hình ảnh JPG',
     formatPdf: 'Tài liệu PDF',
     confirmDownload: 'Tải Tệp Về Máy',
-    connectModeBanner: 'Kéo tới ô đích hoặc chạm vào một ô ý tưởng khác để nối dây',
+    connectModeBanner: 'Kéo tới ô đích hoặc chạm vào một ô ý tưởng khác để nối dây (giữ nguyên cấp độ)',
     cancelConnect: 'Hủy nối',
     toastLineDeleted: 'Đã xóa đường nối!',
     toastBubbleDeleted: 'Đã xóa ô ý tưởng và đôn cấp các nhánh con!',
     toastBubbleAdded: (lvl) => `Đã thêm ô ý tưởng mới (Cấp ${lvl})!`,
-    toastReparented: 'Đã chuyển nhánh và sắp xếp tỏa tròn quanh ô mẹ!',
+    toastReparented: 'Đã cập nhật nhánh mẹ và cấp độ phân cấp!',
+    toastPromoted: (lvl) => `Đã đôn ô ý tưởng lên Cấp ${lvl}!`,
+    toastDemoted: (lvl) => `Đã hạ ô ý tưởng xuống Cấp ${lvl}!`,
+    toastCannotPromote: 'Ô này đã ở Gốc Cấp 1!',
+    toastCannotDemote: 'Không có nhánh phía trên để hạ cấp vào!',
     toastCentered: 'Đã căn giữa toàn bộ sơ đồ tư duy!',
-    toastConnected: 'Đã kết nối hai ô ý tưởng thành công!',
+    toastConnected: 'Đã nối dây giữa hai ô (giữ nguyên cấp độ)!',
     toastSavedLocal: 'Đã lưu không gian làm việc vào bộ nhớ trình duyệt!',
     toastSavedCloud: 'Đã đồng bộ lưu trữ đám mây an toàn!',
     toastSaveError: 'Lỗi khi lưu trữ: ',
@@ -873,7 +923,6 @@ const createInitialWorkspace = (lang = 'en') => {
   };
 };
 
-// Normalize any workspace object to guarantee valid boards array
 const ensureValidWorkspace = (ws, lang = 'en') => {
   if (!ws || typeof ws !== 'object' || !Array.isArray(ws.boards) || ws.boards.length === 0) {
     return createInitialWorkspace(lang);
@@ -890,15 +939,12 @@ const ensureValidWorkspace = (ws, lang = 'en') => {
 };
 
 export default function App() {
-  // Language ('en' by default, 'vi' for 100% Vietnamese)
   const [lang, setLang] = useState('en');
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
 
-  // Theme & Workspace State
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [workspaceState, setWorkspaceState] = useState(() => createInitialWorkspace('en'));
 
-  // Always guarantee non-null valid workspace
   const workspace = useMemo(
     () => ensureValidWorkspace(workspaceState, lang),
     [workspaceState, lang]
@@ -920,7 +966,13 @@ export default function App() {
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Inline Renaming State for Workspaces (Both in Dashboard & Top Header)
+  // Google Login Modal & Custom Account State (when OAuth popup is blocked by iframe/domain)
+  const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
+  const [oauthPopupError, setOauthPopupError] = useState('');
+  const [customLoginName, setCustomLoginName] = useState('');
+  const [customLoginEmail, setCustomLoginEmail] = useState('');
+
+  // Inline Renaming State for Workspaces
   const [editingWorkspaceId, setEditingWorkspaceId] = useState(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState('');
   const [isEditingHeaderWsName, setIsEditingHeaderWsName] = useState(false);
@@ -951,7 +1003,7 @@ export default function App() {
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
-  // Panels visibility (Desktop open by default, Mobile closed drawers by default)
+  // Panels visibility
   const [showLayerPanel, setShowLayerPanel] = useState(true);
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(true);
   useEffect(() => {
@@ -988,13 +1040,16 @@ export default function App() {
   const [hoveredTargetId, setHoveredTargetId] = useState(null);
   const [pointerWorldPos, setPointerWorldPos] = useState({ x: 0, y: 0 });
 
-  const canvasRef = useRef(null);
+  // --- HIERARCHY TREE DRAG & DROP + CANVAS DROP-REPARENT STATES ---
+  const [treeDraggingBubbleId, setTreeDraggingBubbleId] = useState(null);
+  const [treeDropTargetId, setTreeDropTargetId] = useState(null);
+  const [canvasDropReparentMode, setCanvasDropReparentMode] = useState(false);
+  const [canvasDropTargetBubbleId, setCanvasDropTargetBubbleId] = useState(null);
 
-  // Multi-touch Pinch-to-Zoom tracking refs
+  const canvasRef = useRef(null);
   const activePointersRef = useRef(new Map());
   const pinchStateRef = useRef(null);
 
-  // Localized Shape, Stroke, and 2-End Marker lists
   const shapesList = useMemo(() => [
     { id: 'rect', name: t.shapeRect, icon: Square },
     { id: 'oval', name: t.shapeOval, icon: Circle },
@@ -1007,13 +1062,11 @@ export default function App() {
     { id: 'dotted', name: t.styleDotted, dash: '3,4' },
   ], [t]);
 
-  // Endpoint options for both ends of a Line (None or Arrow)
   const endpointOptionsList = useMemo(() => [
     { id: 'none', name: t.markerNone },
     { id: 'arrow', name: t.markerArrow },
   ], [t]);
 
-  // Toggle Language & automatically translate unmodified starter content
   const handleToggleLanguage = () => {
     const nextLang = lang === 'en' ? 'vi' : 'en';
     const prevLang = lang;
@@ -1056,7 +1109,6 @@ export default function App() {
     }));
   };
 
-  // Active Board & Selected Entities
   const currentBoard = useMemo(() => {
     const boards = workspace?.boards || [];
     return boards.find(b => b.id === workspace?.activeBoardId) || boards[0] || createInitialWorkspace(lang).boards[0];
@@ -1070,7 +1122,16 @@ export default function App() {
     return (currentBoard?.lines || []).find(l => l.id === selectedLineId) || null;
   }, [currentBoard, selectedLineId]);
 
-  // Hierarchical Tree Ordered Bubbles with Computed Level Depth for Left Sidebar
+  const getAllDescendantIds = useCallback((rootId, bubbles) => {
+    let result = [];
+    const children = (bubbles || []).filter(b => b.parentId === rootId);
+    for (const child of children) {
+      result.push(child.id);
+      result = result.concat(getAllDescendantIds(child.id, bubbles));
+    }
+    return result;
+  }, []);
+
   const orderedHierarchyBubbles = useMemo(() => {
     const bubbles = currentBoard?.bubbles || [];
     const byId = new Map(bubbles.map(b => [b.id, b]));
@@ -1114,7 +1175,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 2800);
   }, []);
 
-  // Firebase Auth Init
+  // Firebase Auth Init & Real Google Session Detection
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
@@ -1123,7 +1184,6 @@ export default function App() {
           try {
             await signInWithCustomToken(auth, __initial_auth_token);
           } catch (tokenErr) {
-            console.warn("Custom token fallback to anonymous auth:", tokenErr);
             await signInAnonymously(auth);
           }
         } else {
@@ -1134,11 +1194,20 @@ export default function App() {
       }
     };
     initAuth();
-    const unsub = onAuthStateChanged(auth, (usr) => setUser(usr));
+    const unsub = onAuthStateChanged(auth, (usr) => {
+      setUser(usr);
+      if (usr && !usr.isAnonymous && usr.email) {
+        setGoogleProfile({
+          name: usr.displayName || usr.email.split('@')[0],
+          email: usr.email,
+          photoURL: usr.photoURL || null
+        });
+      }
+    });
     return () => unsub();
   }, []);
 
-  // Sync Saved Workspaces from Cloud when logged in with Google
+  // Sync Saved Workspaces from Cloud when logged in
   useEffect(() => {
     if (!user || !db || !googleProfile) {
       setSavedWorkspaces([]);
@@ -1165,7 +1234,6 @@ export default function App() {
     return () => unsub();
   }, [user, googleProfile]);
 
-  // Overwrite Save Function to Cloud
   const saveWorkspaceToCloud = useCallback(async (wsToSave, silent = false) => {
     if (!googleProfile || !wsToSave) return;
     const nowIso = new Date().toISOString();
@@ -1197,7 +1265,6 @@ export default function App() {
     }
   }, [googleProfile, user, lang, triggerToast, t]);
 
-  // Automatic Overwrite Save every 10 minutes when logged in
   useEffect(() => {
     if (!googleProfile) return;
     const TEN_MINUTES_MS = 10 * 60 * 1000;
@@ -1210,55 +1277,88 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, [googleProfile, saveWorkspaceToCloud]);
 
-  // Google Sign-In & Sign-Out Handlers
+  // --- REAL GOOGLE OAUTH POPUP WITH ACCOUNT CHOOSER & TRANSPARENT FALLBACK MODAL ---
   const handleGoogleLogin = async () => {
-    try {
-      if (auth) {
-        try {
-          const provider = new GoogleAuthProvider();
-          const result = await signInWithPopup(auth, provider);
-          if (result?.user) {
-            const profile = {
-              name: result.user.displayName || 'Google User',
-              email: result.user.email || 'user@gmail.com',
-              photoURL: result.user.photoURL || null
-            };
-            setGoogleProfile(profile);
-            triggerToast(t.toastLoggedIn);
-            return;
-          }
-        } catch (popupErr) {
-          console.info('Using integrated Google session in preview environment:', popupErr?.code);
-        }
-      }
+    setOauthPopupError('');
+    if (auth) {
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        const result = await signInWithPopup(auth, provider);
+        if (result?.user) {
+          const profile = {
+            name: result.user.displayName || result.user.email?.split('@')[0] || 'Google User',
+            email: result.user.email || '',
+            photoURL: result.user.photoURL || null
+          };
+          setGoogleProfile(profile);
+          setShowGoogleAuthModal(false);
 
-      const fallbackProfile = {
-        name: lang === 'vi' ? 'Tài khoản Google' : 'Google Account',
-        email: 'mymind.user@gmail.com',
-        photoURL: null
-      };
-      setGoogleProfile(fallbackProfile);
-      setTimeout(() => {
-        if (workspaceRef.current) {
           const nowIso = new Date().toISOString();
           const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const payload = { ...ensureValidWorkspace(workspaceRef.current, lang), updatedAt: nowIso };
-          if (db && user) {
-            const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', payload.id);
+          if (db && result.user) {
+            const docRef = doc(db, 'artifacts', appId, 'users', result.user.uid, 'workspaces', payload.id);
             setDoc(docRef, payload).catch(console.error);
-          } else {
-            setSavedWorkspaces(prev => [payload, ...prev.filter(w => w.id !== payload.id)]);
           }
           setLastSavedTime(timeLabel);
+          triggerToast(t.toastLoggedIn);
+          return;
         }
-      }, 150);
-      triggerToast(t.toastLoggedIn);
-    } catch (err) {
-      console.error('Login error:', err);
+      } catch (popupErr) {
+        if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
+          return;
+        }
+        console.warn('Google OAuth Popup blocked or unauthorized domain:', popupErr);
+        setOauthPopupError(popupErr?.code || popupErr?.message || 'auth/popup-blocked');
+        setShowGoogleAuthModal(true);
+        return;
+      }
     }
+    setOauthPopupError('firebase-auth-unavailable');
+    setShowGoogleAuthModal(true);
   };
 
-  const handleGoogleLogout = () => {
+  const handleConfirmCustomGoogleAccount = (e) => {
+    if (e) e.preventDefault();
+    const emailTrimmed = customLoginEmail.trim();
+    if (!emailTrimmed) return;
+    const nameTrimmed = customLoginName.trim() || emailTrimmed.split('@')[0];
+
+    const profile = {
+      name: nameTrimmed,
+      email: emailTrimmed,
+      photoURL: null
+    };
+    setGoogleProfile(profile);
+    setShowGoogleAuthModal(false);
+
+    setTimeout(() => {
+      if (workspaceRef.current) {
+        const nowIso = new Date().toISOString();
+        const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const payload = { ...ensureValidWorkspace(workspaceRef.current, lang), updatedAt: nowIso };
+        if (db && user) {
+          const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', payload.id);
+          setDoc(docRef, payload).catch(console.error);
+        } else {
+          setSavedWorkspaces(prev => [payload, ...prev.filter(w => w.id !== payload.id)]);
+        }
+        setLastSavedTime(timeLabel);
+      }
+    }, 100);
+    triggerToast(t.toastLoggedIn);
+  };
+
+  const handleGoogleLogout = async () => {
+    try {
+      if (auth && user && !user.isAnonymous) {
+        await signOut(auth);
+        await signInAnonymously(auth);
+      }
+    } catch (e) {
+      console.warn('Sign out fallback:', e);
+    }
     setGoogleProfile(null);
     setShowAccountMenu(false);
     triggerToast(t.toastLoggedOut);
@@ -1277,12 +1377,10 @@ export default function App() {
       updatedAt: nowIso
     };
 
-    // Update active workspace if it is the one being renamed
     if (targetWs.id === workspace.id) {
       setWorkspace(prev => ({ ...prev, name: trimmed }));
     }
 
-    // Update in savedWorkspaces list & Cloud Firestore
     setSavedWorkspaces(prev =>
       prev.map(item => (item.id === targetWs.id ? updatedWs : item))
     );
@@ -1350,7 +1448,6 @@ export default function App() {
     triggerToast(t.toastRedo);
   }, [futureHistory, lang, setWorkspace, triggerToast, t]);
 
-  // Smart Invert Color Logic for Dark Mode
   const getSmartBorderColor = useCallback((color) => {
     if (isDarkMode) {
       if (!color || color.toLowerCase() === '#000000' || color.toLowerCase() === 'black') {
@@ -1368,7 +1465,6 @@ export default function App() {
     return '#0f172a';
   }, []);
 
-  // Board State Updaters
   const updateCurrentBoard = useCallback((mutator, skipHistory = false) => {
     if (!skipHistory) {
       recordHistorySnapshot(workspaceRef.current);
@@ -1407,17 +1503,6 @@ export default function App() {
     setSelectedLineId(null);
     triggerToast(t.toastLineDeleted);
   }, [updateCurrentBoard, triggerToast, t]);
-
-  // Recursive Descendant Finder
-  const getAllDescendantIds = useCallback((rootId, bubbles) => {
-    let result = [];
-    const children = (bubbles || []).filter(b => b.parentId === rootId);
-    for (const child of children) {
-      result.push(child.id);
-      result = result.concat(getAllDescendantIds(child.id, bubbles));
-    }
-    return result;
-  }, []);
 
   const deleteBubble = useCallback((bubbleId) => {
     updateCurrentBoard(board => {
@@ -1462,10 +1547,156 @@ export default function App() {
     triggerToast(t.toastBubbleDeleted);
   }, [updateCurrentBoard, selectedBubbleId, getAllDescendantIds, triggerToast, t]);
 
+  // --- UNIFIED RE-PARENTING ENGINE (Only triggered via Hierarchy Tree or Alt+Drop on Canvas) ---
+  const reparentBubble = useCallback((childId, newParentId, options = { arrangeRadially: true }) => {
+    if (!childId || childId === newParentId) return;
+
+    updateCurrentBoard(board => {
+      const descIds = new Set(getAllDescendantIds(childId, board.bubbles));
+      if (newParentId && descIds.has(newParentId)) return board;
+
+      const child = board.bubbles.find(b => b.id === childId);
+      const newParent = newParentId ? board.bubbles.find(b => b.id === newParentId) : null;
+      if (!child) return board;
+
+      const oldParentId = child.parentId;
+      let newX = child.x;
+      let newY = child.y;
+      const newLevel = newParent ? (newParent.level || 1) + 1 : 1;
+
+      if (newParent && options.arrangeRadially) {
+        const siblings = board.bubbles.filter(b => b.parentId === newParent.id && b.id !== childId);
+        const index = siblings.length;
+        const total = index + 1;
+        const radius = Math.max(230, Math.hypot(newParent.width, newParent.height) + 75);
+        const angle = (index * (2 * Math.PI / Math.max(1, total))) - (Math.PI / 4);
+
+        newX = Math.round(newParent.x + (newParent.width / 2) + Math.cos(angle) * radius - (child.width / 2));
+        newY = Math.round(newParent.y + (newParent.height / 2) + Math.sin(angle) * radius - (child.height / 2));
+      }
+
+      const deltaX = newX - child.x;
+      const deltaY = newY - child.y;
+      const levelDiff = newLevel - (child.level || 1);
+
+      let updatedLines = board.lines.filter(l => {
+        if (!oldParentId) return true;
+        return !((l.sourceId === oldParentId && l.targetId === childId) ||
+                 (l.sourceId === childId && l.targetId === oldParentId));
+      });
+
+      if (newParent && !updatedLines.some(l =>
+        (l.sourceId === newParent.id && l.targetId === childId) ||
+        (l.sourceId === childId && l.targetId === newParent.id)
+      )) {
+        updatedLines.push({
+          id: 'l-' + Date.now().toString().slice(-5),
+          sourceId: newParent.id,
+          targetId: childId,
+          color: '#ef4444',
+          width: 4,
+          style: 'solid',
+          markerStart: 'none',
+          markerEnd: 'none',
+          marker: 'none'
+        });
+      }
+
+      const movedBubbles = board.bubbles.map(b => {
+        if (b.id === childId) {
+          return {
+            ...b,
+            parentId: newParent ? newParent.id : null,
+            level: newLevel,
+            x: newX,
+            y: newY
+          };
+        }
+        if (descIds.has(b.id)) {
+          return {
+            ...b,
+            level: Math.max(1, (b.level || 1) + levelDiff),
+            x: Math.round(b.x + deltaX),
+            y: Math.round(b.y + deltaY)
+          };
+        }
+        return b;
+      });
+
+      const pinned = new Set([childId, ...(newParent ? [newParent.id] : []), ...descIds]);
+      return {
+        ...board,
+        bubbles: resolveBubbleCollisions(movedBubbles, pinned),
+        lines: updatedLines
+      };
+    });
+
+    triggerToast(t.toastReparented);
+  }, [updateCurrentBoard, getAllDescendantIds, triggerToast, t]);
+
+  // --- POWERPOINT-STYLE PROMOTE (← / Shift+Tab) & DEMOTE (→ / Tab) ---
+  const findDemoteParentCandidate = useCallback((bubbleId) => {
+    const idx = orderedHierarchyBubbles.findIndex(b => b.id === bubbleId);
+    if (idx <= 0) return null;
+    const target = orderedHierarchyBubbles[idx];
+    const targetDepth = target.computedDepth || target.level || 1;
+    const descIds = new Set(getAllDescendantIds(bubbleId, currentBoard?.bubbles || []));
+
+    for (let i = idx - 1; i >= 0; i--) {
+      const cand = orderedHierarchyBubbles[i];
+      if (descIds.has(cand.id)) continue;
+      const candDepth = cand.computedDepth || cand.level || 1;
+      if (candDepth === targetDepth) {
+        return cand;
+      }
+      if (candDepth < targetDepth) {
+        break;
+      }
+    }
+    return null;
+  }, [orderedHierarchyBubbles, currentBoard, getAllDescendantIds]);
+
+  const handlePromoteBubble = useCallback((bubbleId) => {
+    const target = (currentBoard?.bubbles || []).find(b => b.id === bubbleId);
+    if (!target) return;
+    if (!target.parentId) {
+      triggerToast(t.toastCannotPromote);
+      return;
+    }
+    const currentParent = (currentBoard?.bubbles || []).find(b => b.id === target.parentId);
+    const grandParentId = currentParent ? currentParent.parentId : null;
+    const nextLvl = Math.max(1, (target.level || 2) - 1);
+    reparentBubble(bubbleId, grandParentId, { arrangeRadially: false });
+    triggerToast(t.toastPromoted(nextLvl));
+  }, [currentBoard, reparentBubble, triggerToast, t]);
+
+  const handleDemoteBubble = useCallback((bubbleId) => {
+    const newParentCandidate = findDemoteParentCandidate(bubbleId);
+    if (!newParentCandidate) {
+      triggerToast(t.toastCannotDemote);
+      return;
+    }
+    const nextLvl = (newParentCandidate.level || 1) + 1;
+    reparentBubble(bubbleId, newParentCandidate.id, { arrangeRadially: false });
+    triggerToast(t.toastDemoted(nextLvl));
+  }, [findDemoteParentCandidate, reparentBubble, triggerToast, t]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && !['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) return;
+
+      if (e.key === 'Tab' && selectedBubbleId) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handlePromoteBubble(selectedBubbleId);
+        } else {
+          handleDemoteBubble(selectedBubbleId);
+        }
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'z') {
           e.preventDefault();
           if (e.shiftKey) {
@@ -1481,10 +1712,10 @@ export default function App() {
           return;
         }
       }
-      if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) {
+      if (e.code === 'Space') {
         setIsSpacePressed(true);
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedBubbleId) {
           deleteBubble(selectedBubbleId);
         } else if (selectedLineId) {
@@ -1499,6 +1730,9 @@ export default function App() {
         setEditingBoardId(null);
         setEditingWorkspaceId(null);
         setIsEditingHeaderWsName(false);
+        setTreeDraggingBubbleId(null);
+        setTreeDropTargetId(null);
+        setCanvasDropTargetBubbleId(null);
       }
     };
     const handleKeyUp = (e) => {
@@ -1511,9 +1745,9 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectedBubbleId, selectedLineId, deleteBubble, deleteLine, handleUndo, handleRedo]);
+  }, [selectedBubbleId, selectedLineId, deleteBubble, deleteLine, handleUndo, handleRedo, handlePromoteBubble, handleDemoteBubble]);
 
-  // Desktop Ctrl + Wheel Zoom (centered around cursor) & Regular Wheel Pan
+  // Desktop Ctrl + Wheel Zoom & Regular Wheel Pan
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
@@ -1548,7 +1782,7 @@ export default function App() {
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // --- CREATE NEW BUBBLE (INHERITS PARENT VISUAL ATTRIBUTES + RESOLVES COLLISIONS) ---
+  // --- CREATE NEW BUBBLE ---
   const handleAddBubble = (e) => {
     if (e) e.preventDefault();
     if (!quickInputText.trim()) return;
@@ -1623,85 +1857,6 @@ export default function App() {
     setSelectedBubbleId(newId);
     setSelectedLineId(null);
     triggerToast(t.toastBubbleAdded(calculatedLvl));
-  };
-
-  // Reparent Bubble in Hierarchy Tree with Radial Layout & Collision Avoidance
-  const reparentBubble = (childId, newParentId) => {
-    if (childId === newParentId) return;
-
-    updateCurrentBoard(board => {
-      const descIds = new Set(getAllDescendantIds(childId, board.bubbles));
-      if (newParentId && descIds.has(newParentId)) return board;
-
-      const child = board.bubbles.find(b => b.id === childId);
-      const newParent = board.bubbles.find(b => b.id === newParentId);
-      if (!child) return board;
-
-      let newX = child.x;
-      let newY = child.y;
-      let newLevel = 1;
-
-      if (newParent) {
-        newLevel = newParent.level + 1;
-        const siblings = board.bubbles.filter(b => b.parentId === newParent.id && b.id !== childId);
-        const index = siblings.length;
-        const total = index + 1;
-        const radius = 240;
-        const angle = (index * (2 * Math.PI / Math.max(1, total))) - (Math.PI / 2);
-
-        newX = Math.round(newParent.x + Math.cos(angle) * radius);
-        newY = Math.round(newParent.y + Math.sin(angle) * radius);
-      }
-
-      const deltaX = newX - child.x;
-      const deltaY = newY - child.y;
-      const levelDiff = newLevel - child.level;
-
-      let updatedLines = [...board.lines];
-      if (newParent && !updatedLines.some(l => (l.sourceId === newParent.id && l.targetId === childId) || (l.sourceId === childId && l.targetId === newParent.id))) {
-        updatedLines.push({
-          id: 'l-' + Date.now().toString().slice(-5),
-          sourceId: newParent.id,
-          targetId: childId,
-          color: '#ef4444',
-          width: 4,
-          style: 'solid',
-          markerStart: 'none',
-          markerEnd: 'none',
-          marker: 'none'
-        });
-      }
-
-      const movedBubbles = board.bubbles.map(b => {
-        if (b.id === childId) {
-          return {
-            ...b,
-            parentId: newParentId || null,
-            level: newLevel,
-            x: newX,
-            y: newY
-          };
-        }
-        if (descIds.has(b.id)) {
-          return {
-            ...b,
-            level: Math.max(1, b.level + levelDiff),
-            x: Math.round(b.x + deltaX),
-            y: Math.round(b.y + deltaY)
-          };
-        }
-        return b;
-      });
-
-      const pinned = new Set([childId, ...(newParentId ? [newParentId] : []), ...descIds]);
-      return {
-        ...board,
-        bubbles: resolveBubbleCollisions(movedBubbles, pinned),
-        lines: updatedLines
-      };
-    });
-
-    triggerToast(t.toastReparented);
   };
 
   // --- 360-DEGREE PERIMETER INTERSECTION & CUBIC BEZIER CURVES ---
@@ -1787,7 +1942,6 @@ export default function App() {
     };
   };
 
-  // Fit Screen (Center Mindmap)
   const handleFitScreen = () => {
     if (!currentBoard.bubbles.length || !canvasRef.current) return;
 
@@ -1815,7 +1969,6 @@ export default function App() {
     triggerToast(t.toastCentered);
   };
 
-  // Zoom button helper that zooms smoothly around the center of the viewport
   const handleZoomStep = (delta) => {
     if (!canvasRef.current) {
       setZoom(z => Math.min(3.0, Math.max(0.25, Number((z + delta).toFixed(2)))));
@@ -1839,7 +1992,7 @@ export default function App() {
     });
   };
 
-  // --- UNIFIED POINTER EVENTS (MOUSE + TOUCH SUPPORT, FLICKER-FREE LINE CONNECT) ---
+  // --- UNIFIED POINTER EVENTS ---
   const clientToWorld = useCallback((clientX, clientY) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
@@ -1874,6 +2027,7 @@ export default function App() {
     return bestId;
   }, [currentBoard.bubbles]);
 
+  // Pure visual line connection: DOES NOT alter bubble level or parentId
   const completeConnection = useCallback((sourceId, targetId) => {
     if (sourceId && targetId && sourceId !== targetId) {
       updateCurrentBoard(board => {
@@ -1882,6 +2036,7 @@ export default function App() {
                (l.sourceId === targetId && l.targetId === sourceId)
         );
         if (exists) return board;
+
         return {
           ...board,
           lines: [
@@ -1909,7 +2064,6 @@ export default function App() {
   const handlePointerDownCanvas = (e) => {
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    // If 2 fingers are touching the screen -> Activate Pinch-to-Zoom mode!
     if (activePointersRef.current.size === 2) {
       const pts = Array.from(activePointersRef.current.values());
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
@@ -1930,6 +2084,7 @@ export default function App() {
       setResizingBubbleId(null);
       setConnectingSourceId(null);
       setHoveredTargetId(null);
+      setCanvasDropTargetBubbleId(null);
       return;
     }
 
@@ -1954,7 +2109,6 @@ export default function App() {
       activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
 
-    // Handle 2-Finger Pinch-to-Zoom & Two-Finger Pan on Mobile/Touchscreen
     if (activePointersRef.current.size === 2 && pinchStateRef.current) {
       const pts = Array.from(activePointersRef.current.values());
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
@@ -2020,6 +2174,28 @@ export default function App() {
       const descendantIds = new Set(getAllDescendantIds(draggingBubbleId, currentBoard.bubbles));
       const pinnedGroup = new Set([draggingBubbleId, ...descendantIds]);
 
+      const isDropReparentActive = canvasDropReparentMode || e.altKey;
+      let detectedDropParentId = null;
+
+      if (isDropReparentActive) {
+        const draggedCenterX = newTargetX + targetBubble.width / 2;
+        const draggedCenterY = newTargetY + targetBubble.height / 2;
+
+        for (const cand of currentBoard.bubbles) {
+          if (cand.id === draggingBubbleId || descendantIds.has(cand.id)) continue;
+          if (
+            draggedCenterX >= cand.x - 12 &&
+            draggedCenterX <= cand.x + cand.width + 12 &&
+            draggedCenterY >= cand.y - 12 &&
+            draggedCenterY <= cand.y + cand.height + 12
+          ) {
+            detectedDropParentId = cand.id;
+            break;
+          }
+        }
+      }
+      setCanvasDropTargetBubbleId(detectedDropParentId);
+
       updateCurrentBoard(board => {
         const movedBubbles = board.bubbles.map(b => {
           if (b.id === draggingBubbleId) {
@@ -2033,7 +2209,9 @@ export default function App() {
 
         return {
           ...board,
-          bubbles: resolveBubbleCollisions(movedBubbles, pinnedGroup)
+          bubbles: detectedDropParentId
+            ? movedBubbles
+            : resolveBubbleCollisions(movedBubbles, pinnedGroup)
         };
       }, true);
     }
@@ -2045,6 +2223,17 @@ export default function App() {
     if (activePointersRef.current.size < 2) {
       pinchStateRef.current = null;
     }
+
+    if (draggingBubbleId && canvasDropTargetBubbleId && canvasDropTargetBubbleId !== draggingBubbleId) {
+      const childId = draggingBubbleId;
+      const newParentId = canvasDropTargetBubbleId;
+      setCanvasDropTargetBubbleId(null);
+      setDraggingBubbleId(null);
+      preInteractionSnapshotRef.current = null;
+      reparentBubble(childId, newParentId, { arrangeRadially: true });
+      return;
+    }
+    setCanvasDropTargetBubbleId(null);
 
     if ((draggingBubbleId || resizingBubbleId) && preInteractionSnapshotRef.current) {
       const prevSnapStr = JSON.stringify(preInteractionSnapshotRef.current);
@@ -2117,7 +2306,7 @@ export default function App() {
     setHoveredTargetId(null);
   };
 
-  // --- WORKSPACE CLOUD OPERATIONS (CREATE, OPEN, DELETE) ---
+  // --- WORKSPACE CLOUD OPERATIONS ---
   const handleCreateNewWorkspace = async () => {
     if (googleProfile) {
       await saveWorkspaceToCloud(workspaceRef.current, true);
@@ -2136,7 +2325,6 @@ export default function App() {
     if (googleProfile) {
       await saveWorkspaceToCloud(newWs, true);
     }
-    // Automatically open inline rename for the newly created workspace
     setEditingWorkspaceId(newWs.id);
     setEditingWorkspaceName(newWs.name);
     triggerToast(t.toastWorkspaceCreated);
@@ -2179,7 +2367,6 @@ export default function App() {
     }
   };
 
-  // Combine active workspace + saved workspaces so the dashboard always displays all available workspaces for renaming
   const dashboardWorkspacesList = useMemo(() => {
     const map = new Map();
     map.set(workspace.id, workspace);
@@ -2195,7 +2382,7 @@ export default function App() {
     return Array.from(map.values());
   }, [workspace, savedWorkspaces]);
 
-  // --- EXPORT BOARD (HIGH-RES >= 1600x1600 + BOTH LINE ENDPOINTS SUPPORT) ---
+  // --- EXPORT BOARD ---
   const handleExportBoard = async () => {
     try {
       triggerToast(t.toastExporting);
@@ -2288,7 +2475,6 @@ export default function App() {
         ctx.restore();
       };
 
-      // 1. Draw Connection Lines at Full Vector Resolution (Supports both start & end markers)
       currentBoard.lines.forEach(l => {
         const s = currentBoard.bubbles.find(b => b.id === l.sourceId);
         const tNode = currentBoard.bubbles.find(b => b.id === l.targetId);
@@ -2315,7 +2501,6 @@ export default function App() {
         drawEndpointMarker(pathData.end, pathData.cp2, endMarker, l.color, l.width);
       });
 
-      // 2. Draw Bubbles & Vector Typography
       currentBoard.bubbles.forEach(b => {
         ctx.save();
         ctx.translate(b.x, b.y);
@@ -2344,7 +2529,6 @@ export default function App() {
           ctx.stroke();
         }
 
-        // Level Badge
         ctx.save();
         ctx.translate(8, 8);
         ctx.fillStyle = isDarkMode ? '#1e293b' : '#f1f5f9';
@@ -2360,7 +2544,6 @@ export default function App() {
         ctx.fillText(`${t.levelShort} ${b.level}`, 20, 9);
         ctx.restore();
 
-        // Main Wrapped & Scaled Idea Text
         const layout = measureAndFitText(b.text, b.shape, b.width, b.height, b.baseFontSize || 15);
         ctx.fillStyle = getSmartTextColor(b.bgColor);
         ctx.font = `600 ${layout.fontSize}px sans-serif`;
@@ -2376,7 +2559,6 @@ export default function App() {
 
       ctx.restore();
 
-      // 3. Create Blob & Trigger Mobile-Safe Download
       const cleanName = (currentBoard.name || 'mindmap').replace(/[^a-zA-Z0-9_\-\u00C0-\u1EF9 ]/g, '_').trim() || 'mindmap';
       const fileName = `${cleanName}_mymind.${exportFormat}`;
       let exportBlob = null;
@@ -2487,6 +2669,7 @@ export default function App() {
     const isSel = selectedBubbleId === bubble.id;
     const isHovered = hoveredBubbleId === bubble.id;
     const isMagTarget = hoveredTargetId === bubble.id;
+    const isDropParentTarget = canvasDropTargetBubbleId === bubble.id;
     const isConnSource = connectingSourceId === bubble.id;
 
     const borderCol = getSmartBorderColor(bubble.borderColor);
@@ -2531,6 +2714,41 @@ export default function App() {
           fill="transparent"
         />
 
+        {isDropParentTarget && (
+          <g className="pointer-events-none">
+            <rect
+              x={bubble.x - 12}
+              y={bubble.y - 12}
+              width={bubble.width + 24}
+              height={bubble.height + 24}
+              rx={18}
+              fill="rgba(139, 92, 246, 0.16)"
+              stroke="#8b5cf6"
+              strokeWidth={3.5}
+              strokeDasharray="6,4"
+            />
+            <rect
+              x={bubble.x + bubble.width / 2 - 75}
+              y={bubble.y - 32}
+              width={150}
+              height={20}
+              rx={6}
+              fill="#7c3aed"
+            />
+            <text
+              x={bubble.x + bubble.width / 2}
+              y={bubble.y - 22}
+              fontSize={10}
+              fontWeight="bold"
+              fill="#ffffff"
+              textAnchor="middle"
+              dominantBaseline="central"
+            >
+              {t.dropTargetBadge}
+            </text>
+          </g>
+        )}
+
         {isMagTarget && (
           <rect
             x={bubble.x - 10}
@@ -2545,7 +2763,7 @@ export default function App() {
           />
         )}
 
-        {isSel && !isMagTarget && (
+        {isSel && !isMagTarget && !isDropParentTarget && (
           <rect
             x={bubble.x - 7}
             y={bubble.y - 7}
@@ -2705,7 +2923,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Inline Editable Workspace Name right under Brand Title */}
               <div className="flex items-center gap-1 mt-0.5">
                 {isEditingHeaderWsName ? (
                   <input
@@ -2752,7 +2969,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* Quick Idea Input Form (Visible on both Desktop & Mobile) */}
+        {/* Quick Idea Input Form */}
         <form onSubmit={handleAddBubble} className="order-3 md:order-2 w-full md:w-auto flex-1 max-w-xl mx-0 md:mx-2 flex items-center gap-2">
           <div className="flex-1 relative flex items-center">
             <input
@@ -2797,7 +3014,7 @@ export default function App() {
           </button>
         </form>
 
-        {/* Right Action Controls + Undo/Redo + Language Flag + Login/Account */}
+        {/* Right Action Controls */}
         <div className="order-2 md:order-3 flex items-center gap-1.5">
           {/* Undo & Redo Buttons */}
           <div className={`flex items-center rounded-xl border p-0.5 ${
@@ -2903,9 +3120,17 @@ export default function App() {
                 }`}
                 title={googleProfile.email}
               >
-                <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black">
-                  {googleProfile.name.charAt(0).toUpperCase()}
-                </div>
+                {googleProfile.photoURL ? (
+                  <img
+                    src={googleProfile.photoURL}
+                    alt={googleProfile.name}
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black">
+                    {googleProfile.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <span className="hidden sm:inline max-w-[90px] truncate">{googleProfile.name}</span>
               </button>
             ) : (
@@ -2925,9 +3150,17 @@ export default function App() {
                 isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
               }`}>
                 <div className="flex items-center gap-2.5 pb-2.5 mb-2.5 border-b border-slate-200 dark:border-slate-700">
-                  <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm flex-none">
-                    {googleProfile.name.charAt(0).toUpperCase()}
-                  </div>
+                  {googleProfile.photoURL ? (
+                    <img
+                      src={googleProfile.photoURL}
+                      alt={googleProfile.name}
+                      className="w-9 h-9 rounded-full object-cover flex-none"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm flex-none">
+                      {googleProfile.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold truncate">{googleProfile.name}</div>
                     <div className="text-[10px] text-slate-400 truncate">{googleProfile.email}</div>
@@ -2978,85 +3211,104 @@ export default function App() {
       </header>
 
       {/* --- 2. DEDICATED BOARD TABS BAR DIRECTLY BELOW THE TOOLBAR --- */}
-      <nav className={`h-10 px-3 md:px-4 flex items-end gap-1.5 border-b overflow-x-auto no-scrollbar z-20 flex-none ${
+      <nav className={`h-10 px-3 md:px-4 flex items-end justify-between gap-2 border-b overflow-x-auto no-scrollbar z-20 flex-none ${
         isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-100/90 border-slate-200'
       }`}>
-        {workspace.boards.map(b => {
-          const isActive = workspace.activeBoardId === b.id;
-          const isEditing = editingBoardId === b.id;
+        <div className="flex items-end gap-1.5">
+          {workspace.boards.map(b => {
+            const isActive = workspace.activeBoardId === b.id;
+            const isEditing = editingBoardId === b.id;
 
-          return (
-            <div
-              key={b.id}
-              onClick={() => setWorkspace(prev => ({ ...prev, activeBoardId: b.id }))}
-              onDoubleClick={() => {
-                setEditingBoardId(b.id);
-                setEditingBoardName(b.name);
-              }}
-              className={`group h-8 px-3 rounded-t-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-all whitespace-nowrap border-t border-x ${
-                isActive
-                  ? isDarkMode
-                    ? 'bg-slate-900 text-indigo-400 border-slate-700 shadow-xs'
-                    : 'bg-white text-indigo-600 border-slate-200 shadow-xs'
-                  : isDarkMode
-                    ? 'bg-slate-900/40 text-slate-400 border-transparent hover:bg-slate-800/60 hover:text-slate-200'
-                    : 'bg-slate-200/60 text-slate-600 border-transparent hover:bg-slate-200 hover:text-slate-900'
-              }`}
-            >
-              {isEditing ? (
-                <input
-                  type="text"
-                  autoFocus
-                  value={editingBoardName}
-                  onChange={(e) => setEditingBoardName(e.target.value)}
-                  onBlur={() => commitRenameBoard(b.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitRenameBoard(b.id);
-                    if (e.key === 'Escape') setEditingBoardId(null);
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-28 px-1.5 py-0.5 text-xs rounded bg-indigo-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none border border-indigo-400"
-                />
-              ) : (
-                <span>{b.name}</span>
-              )}
-
-              <div className="flex items-center gap-0.5">
-                {!isEditing && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingBoardId(b.id);
-                      setEditingBoardName(b.name);
+            return (
+              <div
+                key={b.id}
+                onClick={() => setWorkspace(prev => ({ ...prev, activeBoardId: b.id }))}
+                onDoubleClick={() => {
+                  setEditingBoardId(b.id);
+                  setEditingBoardName(b.name);
+                }}
+                className={`group h-8 px-3 rounded-t-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-all whitespace-nowrap border-t border-x ${
+                  isActive
+                    ? isDarkMode
+                      ? 'bg-slate-900 text-indigo-400 border-slate-700 shadow-xs'
+                      : 'bg-white text-indigo-600 border-slate-200 shadow-xs'
+                    : isDarkMode
+                      ? 'bg-slate-900/40 text-slate-400 border-transparent hover:bg-slate-800/60 hover:text-slate-200'
+                      : 'bg-slate-200/60 text-slate-600 border-transparent hover:bg-slate-200 hover:text-slate-900'
+                }`}
+              >
+                {isEditing ? (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editingBoardName}
+                    onChange={(e) => setEditingBoardName(e.target.value)}
+                    onBlur={() => commitRenameBoard(b.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRenameBoard(b.id);
+                      if (e.key === 'Escape') setEditingBoardId(null);
                     }}
-                    title={t.renameBoardTitle}
-                    className="opacity-60 hover:opacity-100 p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                  </button>
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-28 px-1.5 py-0.5 text-xs rounded bg-indigo-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none border border-indigo-400"
+                  />
+                ) : (
+                  <span>{b.name}</span>
                 )}
-                {workspace.boards.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={(e) => deleteBoardTab(e, b.id)}
-                    title={t.deleteBoardTitle}
-                    className="opacity-60 hover:opacity-100 hover:text-rose-500 p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
 
+                <div className="flex items-center gap-0.5">
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingBoardId(b.id);
+                        setEditingBoardName(b.name);
+                      }}
+                      title={t.renameBoardTitle}
+                      className="opacity-60 hover:opacity-100 p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                  )}
+                  {workspace.boards.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => deleteBoardTab(e, b.id)}
+                      title={t.deleteBoardTitle}
+                      className="opacity-60 hover:opacity-100 hover:text-rose-500 p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          <button
+            onClick={addBoard}
+            className="h-8 px-2.5 mb-0.5 rounded-lg text-xs font-bold flex items-center gap-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors flex-none"
+            title={t.addBoardTitle}
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Quick Toggle for Canvas Drop-to-Reparent Mode */}
         <button
-          onClick={addBoard}
-          className="h-8 px-2.5 mb-0.5 rounded-lg text-xs font-bold flex items-center gap-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors flex-none"
-          title={t.addBoardTitle}
+          type="button"
+          onClick={() => setCanvasDropReparentMode(prev => !prev)}
+          title={t.canvasDropReparentHint}
+          className={`h-7 px-2.5 mb-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 border transition-all flex-none ${
+            canvasDropReparentMode
+              ? 'bg-purple-600 text-white border-purple-500 shadow-xs'
+              : isDarkMode
+                ? 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+                : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+          }`}
         >
-          <Plus className="w-4 h-4" />
+          <GitBranch className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">{t.canvasDropReparentLabel}</span>
         </button>
       </nav>
 
@@ -3134,81 +3386,164 @@ export default function App() {
           />
         )}
 
-        {/* HIERARCHY TREE PANEL (Indented by Level in true tree order) */}
+        {/* HIERARCHY TREE PANEL (Fixed compact 256px width w-64 shrink-0, wraps instruction text properly) */}
         {showLayerPanel && (
           <aside className={`${
             isMobile
-              ? 'fixed inset-y-0 left-0 z-40 w-72 shadow-2xl'
-              : 'w-64 flex-none h-full border-r z-10'
-          } flex flex-col transition-all ${
+              ? 'fixed inset-y-0 left-0 z-40 w-64 max-w-[82vw] shadow-2xl'
+              : 'w-64 min-w-[256px] max-w-[256px] shrink-0 h-full border-r z-10'
+          } flex flex-col overflow-hidden transition-all ${
             isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
             <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                {t.hierarchyTitle}
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 truncate">
+                <Layers className="w-3.5 h-3.5 text-indigo-500 flex-none" />
+                <span className="truncate">{t.hierarchyTitle}</span>
               </span>
-              <button onClick={() => setShowLayerPanel(false)} className="text-slate-400 hover:text-slate-600 p-1">
+              <button onClick={() => setShowLayerPanel(false)} className="text-slate-400 hover:text-slate-600 p-1 flex-none">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              <div className="text-[11px] text-slate-400 px-2 py-1 italic">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1">
+              <div className="text-[11px] text-slate-400 px-1.5 py-1 italic leading-snug whitespace-normal break-words">
                 {t.hierarchyHint}
               </div>
 
-              {orderedHierarchyBubbles.map(bubble => {
+              {/* Root Drop Zone: Dragging any node here promotes it to Root (Level 1) */}
+              {treeDraggingBubbleId && (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setTreeDropTargetId('__ROOT__');
+                  }}
+                  onDragLeave={() => {
+                    if (treeDropTargetId === '__ROOT__') setTreeDropTargetId(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (treeDraggingBubbleId) {
+                      reparentBubble(treeDraggingBubbleId, null, { arrangeRadially: false });
+                    }
+                    setTreeDraggingBubbleId(null);
+                    setTreeDropTargetId(null);
+                  }}
+                  className={`mx-1 my-1.5 p-2 rounded-xl border-2 border-dashed text-center text-[11px] font-bold transition-all ${
+                    treeDropTargetId === '__ROOT__'
+                      ? 'border-indigo-500 bg-indigo-500/15 text-indigo-500 scale-[1.01]'
+                      : 'border-slate-300 dark:border-slate-700 text-slate-400'
+                  }`}
+                >
+                  {t.dropRootZoneText}
+                </div>
+              )}
+
+              {orderedHierarchyBubbles.map((bubble) => {
                 const isSelected = selectedBubbleId === bubble.id;
                 const depthLevel = bubble.computedDepth || bubble.level || 1;
-                const indentPx = Math.min(72, (depthLevel - 1) * 16 + 10);
+                const indentPx = Math.min(56, (depthLevel - 1) * 14);
+                const forbiddenDescendantIds = new Set(getAllDescendantIds(bubble.id, currentBoard.bubbles));
+                const isTreeDropTarget = treeDropTargetId === bubble.id;
+                const canPromote = Boolean(bubble.parentId);
+                const canDemote = Boolean(findDemoteParentCandidate(bubble.id));
 
                 return (
                   <div
                     key={bubble.id}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', bubble.id);
+                      setTreeDraggingBubbleId(bubble.id);
+                    }}
+                    onDragEnd={() => {
+                      setTreeDraggingBubbleId(null);
+                      setTreeDropTargetId(null);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (
+                        treeDraggingBubbleId &&
+                        treeDraggingBubbleId !== bubble.id &&
+                        !forbiddenDescendantIds.has(treeDraggingBubbleId)
+                      ) {
+                        setTreeDropTargetId(bubble.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (treeDropTargetId === bubble.id) setTreeDropTargetId(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const draggedId = treeDraggingBubbleId || e.dataTransfer.getData('text/plain');
+                      if (draggedId && draggedId !== bubble.id) {
+                        reparentBubble(draggedId, bubble.id, { arrangeRadially: true });
+                      }
+                      setTreeDraggingBubbleId(null);
+                      setTreeDropTargetId(null);
+                    }}
                     onClick={() => {
                       setSelectedBubbleId(bubble.id);
                       setSelectedLineId(null);
                       if (isMobile) setShowLayerPanel(false);
                     }}
-                    style={{ marginLeft: `${indentPx - 10}px` }}
-                    className={`py-2 px-2.5 rounded-xl text-xs flex items-center justify-between group cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                    style={{ marginLeft: `${indentPx}px` }}
+                    className={`py-1.5 px-2 rounded-xl text-xs flex items-center justify-between gap-1 group cursor-pointer transition-all ${
+                      isTreeDropTarget
+                        ? 'ring-2 ring-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-bold'
+                        : isSelected
+                          ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 truncate pr-1 min-w-0">
+                    {/* Left: Drag Handle + Color Dot + Level Badge + Node Text */}
+                    <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+                      <GripVertical className="w-3 h-3 text-slate-400 opacity-50 group-hover:opacity-100 cursor-grab flex-none" />
                       <span
                         className="w-2.5 h-2.5 rounded-full flex-none border border-slate-400"
                         style={{ backgroundColor: bubble.bgColor }}
                       />
+                      <span className="text-[9px] font-black px-1 py-0.2 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex-none">
+                        L{depthLevel}
+                      </span>
                       <span className="truncate">{bubble.text}</span>
                     </div>
 
-                    <div className="flex items-center gap-1 flex-none">
-                      <select
-                        value={bubble.parentId || ''}
-                        onChange={(e) => reparentBubble(bubble.id, e.target.value || null)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-[10px] max-w-[92px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-1 py-0.5 outline-none text-slate-700 dark:text-slate-200 font-medium"
+                    {/* Right: Clean PowerPoint-Style Promote (←) / Demote (→) + Delete */}
+                    <div className="flex items-center gap-0.5 flex-none">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePromoteBubble(bubble.id);
+                        }}
+                        disabled={!canPromote}
+                        title={t.promoteBtnTitle}
+                        className="p-0.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-25 disabled:pointer-events-none transition-colors"
                       >
-                        <option value="">{t.rootLevelOption}</option>
-                        {currentBoard.bubbles
-                          .filter(b => b.id !== bubble.id)
-                          .map(b => (
-                            <option key={b.id} value={b.id}>
-                              {t.parentPrefix} {b.text.slice(0, 10)}
-                            </option>
-                          ))}
-                      </select>
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDemoteBubble(bubble.id);
+                        }}
+                        disabled={!canDemote}
+                        title={t.demoteBtnTitle}
+                        className="p-0.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
 
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteBubble(bubble.id);
                         }}
-                        className="p-1 text-slate-400 hover:text-rose-500"
+                        className="p-0.5 text-slate-400 hover:text-rose-500 transition-colors"
                         title={t.deleteBubbleTitle}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -3221,7 +3556,7 @@ export default function App() {
           </aside>
         )}
 
-        {/* INFINITE MINDMAP CANVAS (Unified Pointer Events + Two-Finger Pinch Zoom + Ctrl+Wheel Zoom) */}
+        {/* INFINITE MINDMAP CANVAS */}
         <main
           ref={canvasRef}
           onPointerDown={handlePointerDownCanvas}
@@ -3237,7 +3572,6 @@ export default function App() {
                 : 'cursor-grab'
           } ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}
         >
-          {/* Active Connection Mode Banner */}
           {connectingSourceId && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-lg flex items-center gap-2">
               <Link2 className="w-4 h-4 animate-pulse" />
@@ -3275,7 +3609,6 @@ export default function App() {
                 />
               </pattern>
 
-              {/* Dynamic Color Markers per Line (Both Start and End Arrowheads supported via orient="auto-start-reverse") */}
               {currentBoard.lines.map(line => {
                 const activeColor = selectedLineId === line.id ? '#6366f1' : line.color;
                 return (
@@ -3316,7 +3649,6 @@ export default function App() {
               })}
             </defs>
 
-            {/* Infinite Grid Background */}
             <rect
               id="canvas-svg-bg"
               x="0"
@@ -3326,12 +3658,10 @@ export default function App() {
               fill="url(#infinite-grid-pattern)"
             />
 
-            {/* Transformed World Canvas */}
             <g
               transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}
               className="pointer-events-auto"
             >
-              {/* Connection Lines */}
               {currentBoard.lines.map(line => {
                 const src = currentBoard.bubbles.find(b => b.id === line.sourceId);
                 const tgt = currentBoard.bubbles.find(b => b.id === line.targetId);
@@ -3354,7 +3684,6 @@ export default function App() {
                       setShowPropertiesPanel(true);
                     }}
                   >
-                    {/* Wide invisible touch/click hit path */}
                     <path
                       d={pathData.d}
                       fill="none"
@@ -3380,7 +3709,6 @@ export default function App() {
                 );
               })}
 
-              {/* Flicker-Free Interactive Preview Line */}
               {connectingSourceId && (() => {
                 const src = currentBoard.bubbles.find(b => b.id === connectingSourceId);
                 if (!src) return null;
@@ -3414,7 +3742,6 @@ export default function App() {
                 );
               })()}
 
-              {/* Idea Nodes (Bubbles) */}
               {currentBoard.bubbles.map(bubble => (
                 <g
                   key={bubble.id}
@@ -3426,7 +3753,7 @@ export default function App() {
             </g>
           </svg>
 
-          {/* Bottom Floating Zoom & Center Navigation Bar (Works on both Desktop & Mobile) */}
+          {/* Bottom Floating Zoom & Center Navigation Bar */}
           <div className="absolute bottom-4 right-4 flex items-center gap-1 p-1.5 rounded-2xl bg-white/95 dark:bg-slate-800/95 shadow-xl border border-slate-200 dark:border-slate-700 backdrop-blur-md z-10">
             <button
               type="button"
@@ -3473,12 +3800,12 @@ export default function App() {
           </div>
         </main>
 
-        {/* PROPERTIES SIDEBAR (Desktop Right Sidebar / Mobile Bottom Sheet Drawer) */}
+        {/* PROPERTIES SIDEBAR */}
         {showPropertiesPanel && (
           <aside className={`${
             isMobile
               ? 'fixed inset-x-0 bottom-0 max-h-[75vh] rounded-t-3xl z-40 shadow-2xl border-t'
-              : 'w-80 flex-none h-full border-l z-10'
+              : 'w-80 shrink-0 h-full border-l z-10'
           } p-4 flex flex-col overflow-y-auto ${
             isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
           }`}>
@@ -3506,146 +3833,201 @@ export default function App() {
             )}
 
             {/* BUBBLE PROPERTIES */}
-            {selectedBubble && (
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="font-semibold block mb-1">{t.ideaContentLabel}</label>
-                  <textarea
-                    rows={3}
-                    value={selectedBubble.text}
-                    onChange={(e) => updateBubble(selectedBubble.id, { text: e.target.value })}
-                    className={`w-full p-2.5 rounded-xl border text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none ${
-                      isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
-                    }`}
-                  />
-                  <div className="text-[10px] text-slate-400 mt-1 italic">
-                    {t.ideaContentHint}
+            {selectedBubble && (() => {
+              const parentNode = selectedBubble.parentId
+                ? currentBoard.bubbles.find(b => b.id === selectedBubble.parentId)
+                : null;
+              const canPromote = Boolean(selectedBubble.parentId);
+              const canDemote = Boolean(findDemoteParentCandidate(selectedBubble.id));
+
+              return (
+                <div className="space-y-4 text-xs">
+                  <div>
+                    <label className="font-semibold block mb-1">{t.ideaContentLabel}</label>
+                    <textarea
+                      rows={3}
+                      value={selectedBubble.text}
+                      onChange={(e) => updateBubble(selectedBubble.id, { text: e.target.value })}
+                      className={`w-full p-2.5 rounded-xl border text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none ${
+                        isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
+                      }`}
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1 italic">
+                      {t.ideaContentHint}
+                    </div>
                   </div>
-                </div>
 
-                {/* Start Line Connection Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConnectingSourceId(selectedBubble.id);
-                    if (isMobile) setShowPropertiesPanel(false);
-                  }}
-                  className="w-full py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800 transition-all"
-                >
-                  <Link2 className="w-4 h-4" />
-                  <span>{t.connectBtnLabel}</span>
-                </button>
+                  {/* --- POWERPOINT-STYLE PROMOTE / DEMOTE & DRAG-REPARENT INFO --- */}
+                  <div className={`p-3 rounded-2xl border space-y-2.5 ${
+                    isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-500 dark:text-slate-300 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{t.hierarchySectionLabel}</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white">
+                        {t.levelShort} {selectedBubble.level}
+                      </span>
+                    </div>
 
-                {/* 3 Geometric Shapes */}
-                <div>
-                  <label className="font-semibold block mb-1.5">{t.shapeLabel}</label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {shapesList.map(s => {
-                      const Icon = s.icon;
-                      return (
-                        <button
-                          key={s.id}
-                          onClick={() => updateBubble(selectedBubble.id, { shape: s.id })}
-                          className={`p-2.5 rounded-xl flex flex-col items-center gap-1 border transition-all ${
-                            selectedBubble.shape === s.id
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                              : 'hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          <Icon className="w-5 h-5" />
-                          <span className="text-[10px] font-medium text-center">{s.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Background Color (16-Color Palette) */}
-                <div>
-                  <label className="font-semibold block mb-1.5">{t.bgColorLabel}</label>
-                  <div className="grid grid-cols-8 gap-1.5">
-                    {PALETTE.map(c => (
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
-                        key={`bg-${c}`}
-                        onClick={() => updateBubble(selectedBubble.id, { bgColor: c })}
-                        style={{ backgroundColor: c }}
-                        className={`w-6 h-6 rounded-lg border transition-transform ${
-                          selectedBubble.bgColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
-                        } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Border Color (Identical 16-Color Palette as Background Color) */}
-                <div>
-                  <label className="font-semibold block mb-1.5">{t.borderColorLabel}</label>
-                  <div className="grid grid-cols-8 gap-1.5">
-                    {PALETTE.map(c => (
+                        type="button"
+                        onClick={() => handlePromoteBubble(selectedBubble.id)}
+                        disabled={!canPromote}
+                        title={t.promoteBtnTitle}
+                        className="py-2 px-2.5 rounded-xl border font-bold text-[11px] flex items-center justify-center gap-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-400 disabled:opacity-35 disabled:pointer-events-none transition-all active:scale-95"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{t.promoteBtnLabel}</span>
+                      </button>
                       <button
-                        key={`bd-${c}`}
-                        onClick={() => updateBubble(selectedBubble.id, { borderColor: c })}
-                        style={{ backgroundColor: c }}
-                        className={`w-6 h-6 rounded-lg border transition-transform ${
-                          selectedBubble.borderColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
-                        } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
+                        type="button"
+                        onClick={() => handleDemoteBubble(selectedBubble.id)}
+                        disabled={!canDemote}
+                        title={t.demoteBtnTitle}
+                        className="py-2 px-2.5 rounded-xl border font-bold text-[11px] flex items-center justify-center gap-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-400 disabled:opacity-35 disabled:pointer-events-none transition-all active:scale-95"
+                      >
+                        <span>{t.demoteBtnLabel}</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-indigo-500" />
+                      </button>
+                    </div>
 
-                {/* Border Thickness */}
-                <div>
-                  <div className="flex justify-between font-semibold mb-1">
-                    <span>{t.borderWidthLabel}</span>
-                    <span>{selectedBubble.borderWidth}px</span>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-2 pt-1 border-t border-slate-200/70 dark:border-slate-700/70">
+                      <span className="font-semibold flex-none">{t.currentParentInfoLabel}</span>
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400 truncate">
+                        {parentNode ? `[L${parentNode.level}] ${parentNode.text}` : t.rootLevelOption}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 italic leading-snug">
+                      💡 {t.dragReparentHint}
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={selectedBubble.borderWidth}
-                    onChange={(e) => updateBubble(selectedBubble.id, { borderWidth: Number(e.target.value) })}
-                    className="w-full accent-indigo-600"
-                  />
-                </div>
 
-                {/* Base Font Scale */}
-                <div>
-                  <div className="flex justify-between font-semibold mb-1">
-                    <span>{t.fontScaleLabel}</span>
-                    <span>{selectedBubble.baseFontSize || 15}px</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="11"
-                    max="28"
-                    value={selectedBubble.baseFontSize || 15}
-                    onChange={(e) => updateBubble(selectedBubble.id, { baseFontSize: Number(e.target.value) })}
-                    className="w-full accent-indigo-600"
-                  />
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                  {/* Start Line Connection Button */}
                   <button
-                    onClick={() => deleteBubble(selectedBubble.id)}
-                    className="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold flex items-center justify-center gap-1.5 transition-all"
+                    type="button"
+                    onClick={() => {
+                      setConnectingSourceId(selectedBubble.id);
+                      if (isMobile) setShowPropertiesPanel(false);
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800 transition-all"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    <span>{t.deleteBubbleBtn}</span>
+                    <Link2 className="w-4 h-4" />
+                    <span>{t.connectBtnLabel}</span>
                   </button>
-                </div>
-              </div>
-            )}
 
-            {/* LINE PROPERTIES (Includes Stroke Pattern, Start & End Endpoints, 16-Color Palette, Thickness) */}
+                  {/* 3 Geometric Shapes */}
+                  <div>
+                    <label className="font-semibold block mb-1.5">{t.shapeLabel}</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {shapesList.map(s => {
+                        const Icon = s.icon;
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => updateBubble(selectedBubble.id, { shape: s.id })}
+                            className={`p-2.5 rounded-xl flex flex-col items-center gap-1 border transition-all ${
+                              selectedBubble.shape === s.id
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                : 'hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5" />
+                            <span className="text-[10px] font-medium text-center">{s.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Background Color */}
+                  <div>
+                    <label className="font-semibold block mb-1.5">{t.bgColorLabel}</label>
+                    <div className="grid grid-cols-8 gap-1.5">
+                      {PALETTE.map(c => (
+                        <button
+                          key={`bg-${c}`}
+                          onClick={() => updateBubble(selectedBubble.id, { bgColor: c })}
+                          style={{ backgroundColor: c }}
+                          className={`w-6 h-6 rounded-lg border transition-transform ${
+                            selectedBubble.bgColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
+                          } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Border Color */}
+                  <div>
+                    <label className="font-semibold block mb-1.5">{t.borderColorLabel}</label>
+                    <div className="grid grid-cols-8 gap-1.5">
+                      {PALETTE.map(c => (
+                        <button
+                          key={`bd-${c}`}
+                          onClick={() => updateBubble(selectedBubble.id, { borderColor: c })}
+                          style={{ backgroundColor: c }}
+                          className={`w-6 h-6 rounded-lg border transition-transform ${
+                            selectedBubble.borderColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
+                          } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Border Thickness */}
+                  <div>
+                    <div className="flex justify-between font-semibold mb-1">
+                      <span>{t.borderWidthLabel}</span>
+                      <span>{selectedBubble.borderWidth}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={selectedBubble.borderWidth}
+                      onChange={(e) => updateBubble(selectedBubble.id, { borderWidth: Number(e.target.value) })}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+
+                  {/* Base Font Scale */}
+                  <div>
+                    <div className="flex justify-between font-semibold mb-1">
+                      <span>{t.fontScaleLabel}</span>
+                      <span>{selectedBubble.baseFontSize || 15}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="11"
+                      max="28"
+                      value={selectedBubble.baseFontSize || 15}
+                      onChange={(e) => updateBubble(selectedBubble.id, { baseFontSize: Number(e.target.value) })}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      onClick={() => deleteBubble(selectedBubble.id)}
+                      className="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>{t.deleteBubbleBtn}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* LINE PROPERTIES */}
             {selectedLine && (() => {
               const currentStartMarker = selectedLine.markerStart || 'none';
               const currentEndMarker = selectedLine.markerEnd !== undefined ? selectedLine.markerEnd : (selectedLine.marker || 'none');
 
               return (
                 <div className="space-y-4 text-xs">
-                  {/* Stroke Pattern */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineStyleLabel}</label>
                     <div className="space-y-1.5">
@@ -3676,7 +4058,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Start Endpoint (None vs Arrow) */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineStartMarkerLabel}</label>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -3696,7 +4077,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* End Endpoint (None vs Arrow) */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineEndMarkerLabel}</label>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -3716,7 +4096,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Line Color (Identical 16-Color Palette as Bubble) */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineColorLabel}</label>
                     <div className="grid grid-cols-8 gap-1.5">
@@ -3733,7 +4112,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Line Thickness */}
                   <div>
                     <div className="flex justify-between font-semibold mb-1">
                       <span>{t.lineWidthLabel}</span>
@@ -3765,7 +4143,93 @@ export default function App() {
         )}
       </div>
 
-      {/* --- WORKSPACE DASHBOARD MODAL (SUPPORTS INLINE RENAMING OF ANY WORKSPACE) --- */}
+      {/* --- GOOGLE AUTHENTICATION MODAL (WHEN POPUP IS BLOCKED BY IFRAME OR UNAUTHORIZED DOMAIN) --- */}
+      {showGoogleAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl border ${
+            isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <User className="w-5 h-5 text-indigo-500" />
+                <span>{t.loginModalTitle}</span>
+              </h3>
+              <button onClick={() => setShowGoogleAuthModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {oauthPopupError && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-500 flex-none" />
+                    <span>{t.loginPopupBlockedTitle}</span>
+                  </div>
+                  <p className="text-[11px] opacity-90 leading-relaxed">{t.loginPopupBlockedDesc}</p>
+                  <div className="text-[10px] font-mono opacity-75 pt-0.5">Code: {oauthPopupError}</div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                <User className="w-4 h-4 text-indigo-400" />
+                <span>{t.loginRetryPopup}</span>
+              </button>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+                <span className="flex-shrink mx-3 text-[10px] font-bold uppercase text-slate-400">OR</span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+              </div>
+
+              <form onSubmit={handleConfirmCustomGoogleAccount} className="space-y-3">
+                <label className="text-xs font-semibold block">{t.loginCustomAccountTitle}</label>
+                <input
+                  type="text"
+                  required
+                  value={customLoginName}
+                  onChange={(e) => setCustomLoginName(e.target.value)}
+                  placeholder={t.loginNamePlaceholder}
+                  className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:ring-2 focus:ring-indigo-500/30 ${
+                    isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                />
+                <input
+                  type="email"
+                  required
+                  value={customLoginEmail}
+                  onChange={(e) => setCustomLoginEmail(e.target.value)}
+                  placeholder={t.loginEmailPlaceholder}
+                  className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:ring-2 focus:ring-indigo-500/30 ${
+                    isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleAuthModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md transition-all"
+                  >
+                    {t.loginContinueWithInfo}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- WORKSPACE DASHBOARD MODAL --- */}
       {showWorkspaceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className={`w-full max-w-lg p-6 rounded-3xl shadow-2xl border ${
@@ -3788,7 +4252,6 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
-              {/* Active Workspace Quick Rename Input */}
               <div>
                 <label className="text-xs font-semibold block mb-1">{t.currentWorkspaceName}</label>
                 <div className="flex gap-2">
@@ -3819,7 +4282,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Workspace List Dashboard (Allows Renaming Any Workspace Item) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -3919,7 +4381,6 @@ export default function App() {
 
                         {!isEditingThisWs && (
                           <div className="flex items-center gap-1 flex-none">
-                            {/* Rename Workspace Button */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -3963,7 +4424,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Cloud Sync Status or Google Login Prompt */}
               {googleProfile ? (
                 <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center justify-between ${
                   isDarkMode ? 'bg-slate-900/70 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
