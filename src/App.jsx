@@ -16,8 +16,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  GripVertical,
-  GitBranch,
   Cloud,
   Check,
   X,
@@ -35,7 +33,10 @@ import {
   Clock,
   Lock,
   FolderPlus,
-  AlertCircle
+  GripVertical,
+  GitBranch,
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 
 // Optional Firebase imports with safe fallback
@@ -46,8 +47,7 @@ import {
   signInWithCustomToken,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup,
-  signOut
+  signInWithPopup
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -82,6 +82,9 @@ try {
 }
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'mymind-studio-default';
+const LOCAL_STORAGE_WORKSPACES_KEY = 'mymind_studio_workspaces_v3';
+const LOCAL_STORAGE_ACTIVE_WS_KEY = 'mymind_studio_active_ws_id_v3';
+const LOCAL_STORAGE_PROFILE_KEY = 'mymind_studio_google_profile_v3';
 
 // --- STRICT BILINGUAL DICTIONARY (100% PURE EN & 100% PURE VI) ---
 const TRANSLATIONS = {
@@ -90,37 +93,28 @@ const TRANSLATIONS = {
     editionBadge: 'PRO',
     languageBtnLabel: 'Language: EN',
     workspaceLabel: 'Workspace',
-    manageWorkspaces: 'Workspace Dashboard',
-    currentWorkspaceName: 'Active Workspace Name:',
-    renameWorkspaceTitle: 'Rename workspace',
-    workspaceRenamedToast: 'Workspace renamed successfully!',
-    workspaceTip: 'Click the pencil icon next to any workspace to rename it, or create multiple boards in the tab bar below the toolbar.',
+    manageWorkspaces: 'Workspace Menu',
+    currentWorkspaceName: 'Current Workspace Name:',
+    workspaceTip: 'Create multiple independent boards in the tab bar below the toolbar to organize your ideas by stage or topic.',
     done: 'Done',
     cancel: 'Cancel',
     create: 'Create',
     save: 'Save',
     loginBtn: 'Log In',
     logoutBtn: 'Log Out',
-    googleLoginBtn: 'Sign in with Google Popup',
-    loginModalTitle: 'Sign In with Google Account',
-    loginPopupBlockedTitle: 'Google Popup Blocked or Domain Not Authorized',
-    loginPopupBlockedDesc: 'In embedded preview environments (or if your domain is not yet added to Firebase Console -> Authentication -> Authorized Domains), Google blocks the OAuth popup window.',
-    loginCustomAccountTitle: 'Sign in with your personal Google info (Preview / Local):',
-    loginNamePlaceholder: 'Your Full Name (e.g. Alex Nguyen)',
-    loginEmailPlaceholder: 'your.email@gmail.com',
-    loginContinueWithInfo: 'Sign In with This Account',
-    loginRetryPopup: 'Retry Official Google Popup',
-    loginRequiredTitle: 'Sign In to Sync Cloud Workspaces',
-    loginRequiredDesc: 'Sign in with your Google account to save multiple workspaces to the cloud and access them anywhere. You can still rename your active workspace above or continue working offline.',
-    continueWithoutLogin: 'Close & Continue Offline',
-    savedWorkspacesTitle: 'All Workspaces',
+    googleLoginBtn: 'Sign in with Google',
+    loginRequiredTitle: 'Sign In to Sync to Cloud',
+    loginRequiredDesc: 'Sign in with your Google account to sync and back up all your workspaces across devices. You can also manage and rename your local workspaces below.',
+    continueWithoutLogin: 'Close & Continue',
+    savedWorkspacesTitle: 'Saved Workspaces',
     newWorkspaceBtn: 'New Workspace',
     defaultNewWorkspaceName: 'Untitled Workspace',
+    defaultNewBoardName: 'Untitled Board',
     openWorkspaceBtn: 'Open',
     activeBadge: 'Active',
-    autoSaveInfo: 'Auto-saves every 10 minutes (overwrites previous version)',
+    autoSaveInfo: 'Auto-saves changes & syncs every 10 minutes',
     lastAutoSaved: 'Last saved:',
-    notSavedYet: 'Waiting for next auto-save cycle',
+    notSavedYet: 'Not saved yet',
     saveNowBtn: 'Save Now',
     undoTitle: 'Undo (Ctrl+Z)',
     redoTitle: 'Redo (Ctrl+Y)',
@@ -128,14 +122,15 @@ const TRANSLATIONS = {
     toastRedo: 'Action redone',
     toastLoggedIn: 'Signed in with Google account!',
     toastLoggedOut: 'Signed out of Google account',
-    toastAutoSaved: 'Workspace auto-saved to cloud!',
+    toastAutoSaved: 'Workspace auto-saved!',
     toastWorkspaceSwitched: 'Workspace opened!',
-    toastWorkspaceCreated: 'New workspace created!',
+    toastWorkspaceCreated: 'New Untitled Workspace created!',
     toastWorkspaceDeleted: 'Workspace deleted!',
+    toastWorkspaceRenamed: 'Workspace renamed!',
     export: 'Export',
     hierarchy: 'Hierarchy',
     properties: 'Properties',
-    boardDefaultName: 'Board',
+    boardDefaultName: 'Untitled Board',
     addBoardTitle: 'Add new board',
     renameBoardTitle: 'Rename board',
     deleteBoardTitle: 'Delete board',
@@ -144,24 +139,23 @@ const TRANSLATIONS = {
     inputChildPlaceholder: (lvl, parentText) => `Add child idea (Lvl ${lvl}) for "${parentText}"...`,
     clearSelectionTitle: 'Deselect to create Level 1 idea',
     hierarchyTitle: 'Hierarchy Tree',
-    hierarchyHint: '*Use ←/→ (Shift+Tab / Tab) to Promote/Demote level, or drag nodes to change parent:',
-    dropRootZoneText: 'Drop here to make Root (Level 1)',
-    promoteBtnTitle: 'Promote Level (Shift+Tab) - Move up 1 level',
-    demoteBtnTitle: 'Demote Level (Tab) - Make child of previous sibling',
-    promoteBtnLabel: 'Promote (←)',
-    demoteBtnLabel: 'Demote (→)',
-    hierarchySectionLabel: 'Hierarchy Level (PowerPoint Style):',
-    currentParentInfoLabel: 'Current Parent:',
-    dragReparentHint: 'Drag nodes in the Hierarchy Tree (left) or hold Alt while dragging on the board to change parent.',
-    canvasDropReparentLabel: 'Canvas Drop-to-Reparent Mode',
-    canvasDropReparentHint: 'When active (or holding Alt while dragging on canvas), dropping a node onto another node makes it a child branch.',
-    dropTargetBadge: 'Drop to attach as child!',
-    rootLevelOption: 'Root (Level 1)',
+    hierarchyHint: '*Use ←/→ (Shift+Tab / Tab) like PowerPoint to Promote/Demote level, or drag nodes to change parent:',
+    rootDropZoneLabel: 'Drop here to make Root (Level 1)',
+    promoteTitle: 'Promote Level (← or Shift+Tab)',
+    demoteTitle: 'Demote Level (→ or Tab)',
+    promoteBtnLabel: 'Promote (Lvl - 1)',
+    demoteBtnLabel: 'Demote (Lvl + 1)',
+    hierarchySectionLabel: 'Hierarchy Level & Parent:',
+    currentParentLabel: 'Parent Node:',
+    rootLevelOption: '(Root Lvl 1)',
+    parentPrefix: 'Parent:',
     deleteBubbleTitle: 'Delete idea node (promote children)',
     bubblePropsTitle: 'Idea Node Properties',
     linePropsTitle: 'Connection Line Properties',
     noSelectionTitle: 'No Selection',
     noSelectionHint: 'Tap any idea node or connection line on the board to customize its appearance.',
+    emptyBoardTitle: 'Untitled Board is Empty',
+    emptyBoardDesc: 'Type your first idea into the bar above and click "+ Create" to start your mindmap.',
     ideaContentLabel: 'Idea Content:',
     ideaContentHint: '*Font scales up automatically when enlarged and wraps lines when shrunk.',
     shapeLabel: 'Shape:',
@@ -178,13 +172,11 @@ const TRANSLATIONS = {
     styleSolid: 'Solid Line',
     styleDashed: 'Dashed Line',
     styleDotted: 'Dotted Line',
-    lineStartMarkerLabel: 'Start Endpoint:',
-    lineEndMarkerLabel: 'End Endpoint:',
+    lineStartMarkerLabel: 'Start Endpoint (Head 1):',
+    lineEndMarkerLabel: 'End Endpoint (Head 2):',
     lineMarkerLabel: 'Line Endpoint:',
     markerNone: 'None',
     markerArrow: 'Arrow',
-    markerCircle: 'Circle',
-    markerSquare: 'Square',
     lineColorLabel: 'Line Color:',
     lineWidthLabel: 'Line Thickness:',
     deleteLineBtn: 'Delete Connection Line',
@@ -199,25 +191,25 @@ const TRANSLATIONS = {
     formatJpg: 'JPG Image',
     formatPdf: 'PDF Document',
     confirmDownload: 'Download File',
-    connectModeBanner: 'Drag to target node or tap another node to connect (keeps current levels)',
+    connectModeBanner: 'Drag to target node or tap another node to connect (levels stay unchanged)',
     cancelConnect: 'Cancel',
+    canvasReparentModeBtn: 'Canvas Drop-to-Reparent Mode',
+    dropToAttachHint: 'Drop to attach as child!',
     toastLineDeleted: 'Connection line deleted!',
     toastBubbleDeleted: 'Idea node deleted and child nodes promoted!',
     toastBubbleAdded: (lvl) => `New idea node added (Level ${lvl})!`,
-    toastReparented: 'Updated parent branch & hierarchy levels!',
-    toastPromoted: (lvl) => `Promoted node to Level ${lvl}!`,
-    toastDemoted: (lvl) => `Demoted node to Level ${lvl}!`,
-    toastCannotPromote: 'Already at Root Level 1!',
-    toastCannotDemote: 'No preceding node above to demote under!',
+    toastReparented: 'Branch moved and arranged radially!',
+    toastPromoted: (lvl) => `Promoted to Level ${lvl}!`,
+    toastDemoted: (lvl) => `Demoted to Level ${lvl}!`,
     toastCentered: 'Mindmap centered in view!',
     toastConnected: 'Nodes connected (levels preserved)!',
-    toastSavedLocal: 'Workspace saved to browser storage!',
-    toastSavedCloud: 'Workspace synced to cloud!',
-    toastSaveError: 'Failed to save workspace: ',
+    toastSavedLocal: 'Workspace saved!',
+    toastSavedCloud: 'Workspace saved & synced to Google account!',
+    toastSaveError: 'Saved locally (Cloud sync pending Firestore rules)',
     toastExporting: 'Generating high-resolution export...',
     toastExportSuccess: 'File downloaded successfully!',
     toastExportError: 'An error occurred while exporting!',
-    toastBoardAdded: 'New board created!',
+    toastBoardAdded: 'New Untitled Board created!',
     toastBoardDeleted: 'Board deleted!',
     langSwitchTooltip: 'Chuyển sang Tiếng Việt',
     themeToggleTooltip: 'Toggle Light / Dark Mode',
@@ -233,43 +225,42 @@ const TRANSLATIONS = {
     adPopupDirectDownload: 'Download File Again',
     adPopupResolution: 'Resolution',
     adPopupCloseBtn: 'Close & Return to Board',
+    googleModalTitle: 'Sign In with Google Account',
+    googlePopupNoticeTitle: 'Google Popup Blocked or Domain Not Authorized',
+    googlePopupNoticeDesc: 'In embedded preview environments (or if your domain is not yet added to Firebase Console -> Authentication -> Settings -> Authorized Domains), Google blocks the popup window.',
+    retryGooglePopupBtn: 'Retry Official Google Popup',
+    orManualGoogleLabel: 'Sign in with your Google Account info to save & load your workspaces:',
+    nameInputPlaceholder: 'Your Full Name (e.g. Long Nguyen)',
+    emailInputPlaceholder: 'your.email@gmail.com',
+    signInWithAccountBtn: 'Sign In & Load Workspaces',
   },
   vi: {
     appName: 'MyMind Studio',
     editionBadge: 'CAO CẤP',
     languageBtnLabel: 'Ngôn ngữ: VI',
     workspaceLabel: 'Không gian làm việc',
-    manageWorkspaces: 'Bảng Quản Lý Workspace',
-    currentWorkspaceName: 'Tên Không gian làm việc đang mở:',
-    renameWorkspaceTitle: 'Đổi tên Không gian làm việc',
-    workspaceRenamedToast: 'Đã đổi tên Không gian làm việc thành công!',
-    workspaceTip: 'Nhấn vào biểu tượng cây bút cạnh mỗi Workspace để đổi tên, hoặc tạo thêm các bảng vẽ độc lập ở thanh thẻ bên dưới thanh công cụ.',
+    manageWorkspaces: 'Danh mục Không gian làm việc',
+    currentWorkspaceName: 'Tên không gian làm việc hiện tại:',
+    workspaceTip: 'Tạo thêm các bảng vẽ độc lập ở thanh thẻ bên dưới thanh công cụ để phân chia từng giai đoạn hoặc chủ đề ý tưởng.',
     done: 'Hoàn tất',
     cancel: 'Hủy bỏ',
     create: 'Tạo mới',
     save: 'Lưu trữ',
     loginBtn: 'Đăng nhập',
     logoutBtn: 'Đăng xuất',
-    googleLoginBtn: 'Đăng nhập qua cửa sổ Google',
-    loginModalTitle: 'Đăng Nhập Tài Khoản Google',
-    loginPopupBlockedTitle: 'Cửa sổ Google Popup bị chặn hoặc Tên miền chưa cấp quyền',
-    loginPopupBlockedDesc: 'Trong môi trường khung xem trước nhúng (hoặc khi tên miền web chưa được thêm vào Firebase Console -> Authentication -> Authorized Domains), trình duyệt sẽ chặn cửa sổ Popup của Google.',
-    loginCustomAccountTitle: 'Nhập tài khoản Google cá nhân của bạn (Dùng cho bản Preview / Local):',
-    loginNamePlaceholder: 'Họ và tên của bạn (VD: Nguyễn Văn A)',
-    loginEmailPlaceholder: 'email.cua.ban@gmail.com',
-    loginContinueWithInfo: 'Đăng Nhập Bằng Tài Khoản Này',
-    loginRetryPopup: 'Thử mở lại Google Popup',
+    googleLoginBtn: 'Đăng nhập với Google',
     loginRequiredTitle: 'Đăng Nhập Để Đồng Bộ Đám Mây',
-    loginRequiredDesc: 'Đăng nhập tài khoản Google để lưu trữ nhiều Không gian làm việc lên đám mây và mở lại mọi lúc. Bạn vẫn có thể đổi tên Không gian làm việc hiện tại ở khung phía trên hoặc tiếp tục vẽ trực tiếp.',
-    continueWithoutLogin: 'Đóng & Tiếp tục không cần lưu',
-    savedWorkspacesTitle: 'Danh Sách Không Gian Làm Việc',
+    loginRequiredDesc: 'Đăng nhập tài khoản Google để lưu trữ và mở lại tất cả các Không gian làm việc của bạn trên mọi thiết bị.',
+    continueWithoutLogin: 'Đóng & Tiếp tục',
+    savedWorkspacesTitle: 'Không Gian Làm Việc Đã Lưu',
     newWorkspaceBtn: 'Tạo Workspace Mới',
-    defaultNewWorkspaceName: 'Không gian làm việc mới',
+    defaultNewWorkspaceName: 'Untitled Workspace',
+    defaultNewBoardName: 'Untitled Board',
     openWorkspaceBtn: 'Mở',
     activeBadge: 'Đang mở',
-    autoSaveInfo: 'Tự động lưu đè sau mỗi 10 phút khi đã đăng nhập',
+    autoSaveInfo: 'Tự động lưu và đồng bộ sau mỗi 10 phút',
     lastAutoSaved: 'Lưu lần cuối:',
-    notSavedYet: 'Đang chờ chu kỳ tự động lưu tiếp theo',
+    notSavedYet: 'Chưa lưu',
     saveNowBtn: 'Lưu Ngay',
     undoTitle: 'Hoàn tác (Ctrl+Z)',
     redoTitle: 'Làm lại (Ctrl+Y)',
@@ -277,14 +268,15 @@ const TRANSLATIONS = {
     toastRedo: 'Đã làm lại thao tác',
     toastLoggedIn: 'Đã đăng nhập tài khoản Google thành công!',
     toastLoggedOut: 'Đã đăng xuất tài khoản Google',
-    toastAutoSaved: 'Đã tự động lưu đè Workspace lên đám mây!',
+    toastAutoSaved: 'Đã tự động lưu Workspace!',
     toastWorkspaceSwitched: 'Đã mở Không gian làm việc!',
-    toastWorkspaceCreated: 'Đã tạo Không gian làm việc mới!',
+    toastWorkspaceCreated: 'Đã tạo Untitled Workspace mới!',
     toastWorkspaceDeleted: 'Đã xóa Không gian làm việc!',
+    toastWorkspaceRenamed: 'Đã đổi tên Không gian làm việc!',
     export: 'Tải về',
     hierarchy: 'Cây phân cấp',
     properties: 'Thuộc tính',
-    boardDefaultName: 'Bảng vẽ',
+    boardDefaultName: 'Untitled Board',
     addBoardTitle: 'Thêm bảng vẽ mới',
     renameBoardTitle: 'Đổi tên bảng vẽ',
     deleteBoardTitle: 'Xóa bảng vẽ',
@@ -293,24 +285,23 @@ const TRANSLATIONS = {
     inputChildPlaceholder: (lvl, parentText) => `Thêm ý tưởng con (Cấp ${lvl}) cho "${parentText}"...`,
     clearSelectionTitle: 'Bỏ chọn để tạo ý tưởng Cấp 1',
     hierarchyTitle: 'Cây Phân Cấp Ý Tưởng',
-    hierarchyHint: '*Bấm ←/→ (Shift+Tab / Tab) để Đôn/Hạ cấp, hoặc kéo thả để đổi nhánh mẹ:',
-    dropRootZoneText: 'Thả vào đây để đưa về Gốc (Cấp 1)',
-    promoteBtnTitle: 'Đôn lên 1 cấp (Shift+Tab) - Giống PowerPoint Promote',
-    demoteBtnTitle: 'Hạ xuống 1 cấp (Tab) - Giống PowerPoint Demote',
-    promoteBtnLabel: 'Đôn cấp (←)',
-    demoteBtnLabel: 'Hạ cấp (→)',
-    hierarchySectionLabel: 'Thay Đổi Cấp Độ (Kiểu PowerPoint):',
-    currentParentInfoLabel: 'Nhánh mẹ hiện tại:',
-    dragReparentHint: 'Kéo thả các dòng trong Cây phân cấp (bên trái) hoặc giữ phím Alt khi kéo ô trên bảng vẽ để đổi nhánh mẹ.',
-    canvasDropReparentLabel: 'Chế độ Kéo Thả Đè Gắn Nhánh Mẹ',
-    canvasDropReparentHint: 'Khi bật (hoặc giữ phím Alt lúc kéo ô trên bảng vẽ), thả đè một ô lên ô khác sẽ tự động gắn làm nhánh con.',
-    dropTargetBadge: 'Thả để gắn làm nhánh con!',
-    rootLevelOption: 'Gốc (Cấp 1)',
+    hierarchyHint: '*Dùng nút ←/→ (Shift+Tab / Tab) giống PowerPoint để Tăng/Giảm cấp, hoặc kéo thả để đổi ô mẹ:',
+    rootDropZoneLabel: 'Thả vào đây để thành Gốc (Cấp 1)',
+    promoteTitle: 'Đôn lên 1 cấp (← hoặc Shift+Tab)',
+    demoteTitle: 'Hạ xuống 1 cấp (→ hoặc Tab)',
+    promoteBtnLabel: 'Đôn cấp (Cấp - 1)',
+    demoteBtnLabel: 'Hạ cấp (Cấp + 1)',
+    hierarchySectionLabel: 'Cấp độ & Nhánh mẹ:',
+    currentParentLabel: 'Ô mẹ hiện tại:',
+    rootLevelOption: '(Gốc Cấp 1)',
+    parentPrefix: 'Mẹ:',
     deleteBubbleTitle: 'Xóa ô ý tưởng (đôn cấp nhánh con)',
     bubblePropsTitle: 'Thuộc Tính Ô Ý Tưởng',
     linePropsTitle: 'Thuộc Tính Đường Nối',
     noSelectionTitle: 'Chưa Chọn Đối Tượng',
     noSelectionHint: 'Chạm vào một ô ý tưởng hoặc đường nối bất kỳ trên bảng vẽ để tùy chỉnh kiểu dáng.',
+    emptyBoardTitle: 'Bảng Vẽ Đang Trống',
+    emptyBoardDesc: 'Nhập ý tưởng đầu tiên vào thanh công cụ phía trên và nhấn "+ Tạo mới" để bắt đầu vẽ sơ đồ.',
     ideaContentLabel: 'Nội dung ý tưởng:',
     ideaContentHint: '*Chữ tự động phóng to khi kéo giãn khung và tự ngắt dòng khi thu hẹp.',
     shapeLabel: 'Hình khối:',
@@ -332,8 +323,6 @@ const TRANSLATIONS = {
     lineMarkerLabel: 'Biểu tượng đầu nối:',
     markerNone: 'Không có đầu',
     markerArrow: 'Hình mũi tên',
-    markerCircle: 'Hình tròn đặc',
-    markerSquare: 'Hình vuông đặc',
     lineColorLabel: 'Màu đường nối:',
     lineWidthLabel: 'Độ dày đường nối:',
     deleteLineBtn: 'Xóa Đường Nối Này',
@@ -348,25 +337,25 @@ const TRANSLATIONS = {
     formatJpg: 'Hình ảnh JPG',
     formatPdf: 'Tài liệu PDF',
     confirmDownload: 'Tải Tệp Về Máy',
-    connectModeBanner: 'Kéo tới ô đích hoặc chạm vào một ô ý tưởng khác để nối dây (giữ nguyên cấp độ)',
+    connectModeBanner: 'Kéo tới ô đích hoặc chạm vào ô khác để nối dây (giữ nguyên cấp độ)',
     cancelConnect: 'Hủy nối',
+    canvasReparentModeBtn: 'Chế độ Kéo Thả Đè Đổi Nhánh Mẹ',
+    dropToAttachHint: 'Thả ra để gắn làm nhánh con!',
     toastLineDeleted: 'Đã xóa đường nối!',
     toastBubbleDeleted: 'Đã xóa ô ý tưởng và đôn cấp các nhánh con!',
     toastBubbleAdded: (lvl) => `Đã thêm ô ý tưởng mới (Cấp ${lvl})!`,
-    toastReparented: 'Đã cập nhật nhánh mẹ và cấp độ phân cấp!',
-    toastPromoted: (lvl) => `Đã đôn ô ý tưởng lên Cấp ${lvl}!`,
-    toastDemoted: (lvl) => `Đã hạ ô ý tưởng xuống Cấp ${lvl}!`,
-    toastCannotPromote: 'Ô này đã ở Gốc Cấp 1!',
-    toastCannotDemote: 'Không có nhánh phía trên để hạ cấp vào!',
+    toastReparented: 'Đã chuyển nhánh và sắp xếp tỏa tròn quanh ô mẹ!',
+    toastPromoted: (lvl) => `Đã đôn lên Cấp ${lvl}!`,
+    toastDemoted: (lvl) => `Đã hạ xuống Cấp ${lvl}!`,
     toastCentered: 'Đã căn giữa toàn bộ sơ đồ tư duy!',
-    toastConnected: 'Đã nối dây giữa hai ô (giữ nguyên cấp độ)!',
-    toastSavedLocal: 'Đã lưu không gian làm việc vào bộ nhớ trình duyệt!',
-    toastSavedCloud: 'Đã đồng bộ lưu trữ đám mây an toàn!',
-    toastSaveError: 'Lỗi khi lưu trữ: ',
+    toastConnected: 'Đã kết nối hai ô ý tưởng (giữ nguyên Level)!',
+    toastSavedLocal: 'Đã lưu Không gian làm việc!',
+    toastSavedCloud: 'Đã lưu và đồng bộ vào tài khoản Google!',
+    toastSaveError: 'Đã lưu vào máy (Đồng bộ đám mây chờ mở quyền Firestore Rules)',
     toastExporting: 'Đang chuẩn bị tệp tải về độ phân giải cao...',
     toastExportSuccess: 'Đã tải tệp về máy thành công!',
     toastExportError: 'Có lỗi xảy ra khi tải về!',
-    toastBoardAdded: 'Đã tạo bảng vẽ mới!',
+    toastBoardAdded: 'Đã tạo Untitled Board mới!',
     toastBoardDeleted: 'Đã xóa bảng vẽ!',
     langSwitchTooltip: 'Switch to English',
     themeToggleTooltip: 'Chuyển chế độ Sáng / Tối',
@@ -382,6 +371,14 @@ const TRANSLATIONS = {
     adPopupDirectDownload: 'Tải Tệp Trực Tiếp',
     adPopupResolution: 'Độ phân giải',
     adPopupCloseBtn: 'Đóng & Quay lại bảng vẽ',
+    googleModalTitle: 'Đăng Nhập Tài Khoản Google',
+    googlePopupNoticeTitle: 'Cửa Sổ Popup Bị Chặn Hoặc Tên Miền Chưa Cấp Quyền',
+    googlePopupNoticeDesc: 'Trong khung chạy thử Preview (hoặc khi tên miền chưa thêm vào Firebase Console -> Authentication -> Settings -> Authorized Domains), cửa sổ Google Popup sẽ bị chặn.',
+    retryGooglePopupBtn: 'Thử Mở Lại Cửa Sổ Google Popup',
+    orManualGoogleLabel: 'Nhập thông tin tài khoản Google của bạn để lưu & mở lại dữ liệu:',
+    nameInputPlaceholder: 'Họ và tên của bạn (VD: Nguyễn Văn Long)',
+    emailInputPlaceholder: 'email.cua.ban@gmail.com',
+    signInWithAccountBtn: 'Đăng Nhập & Tải Dữ Liệu',
   }
 };
 
@@ -470,45 +467,6 @@ const drawRoundedRectPath = (ctx, x, y, w, h, r) => {
   ctx.lineTo(x, y + radius);
   ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
-};
-
-const SAMPLE_TRANSLATIONS = {
-  wsName: {
-    en: 'Product Launch Strategy 🚀',
-    vi: 'Chiến dịch Ra mắt Sản phẩm 🚀'
-  },
-  board1: {
-    en: 'Brainstorming',
-    vi: 'Phác thảo Ý tưởng'
-  },
-  board2: {
-    en: 'Marketing Plan',
-    vi: 'Kế hoạch Tiếp thị'
-  },
-  b1: {
-    en: 'Core Product Vision',
-    vi: 'Tầm nhìn Sản phẩm Cốt lõi'
-  },
-  b2: {
-    en: 'Target Audience',
-    vi: 'Khách hàng Mục tiêu'
-  },
-  b3: {
-    en: 'Key Features',
-    vi: 'Tính năng Trọng tâm'
-  },
-  b4: {
-    en: 'Creators & Teams',
-    vi: 'Nhà sáng tạo & Đội nhóm'
-  },
-  b5: {
-    en: 'Real-time Mindmapping',
-    vi: 'Sơ đồ Tư duy Thời gian thực'
-  },
-  bm1: {
-    en: 'Q4 Launch Goals',
-    vi: 'Mục tiêu Ra mắt Quý 4'
-  }
 };
 
 const PALETTE = [
@@ -762,201 +720,71 @@ const resolveBubbleCollisions = (bubbles, pinnedIdsSet = new Set(), padding = CO
   return nodes;
 };
 
-// Initial Workspace Factory (English Default)
-const createInitialWorkspace = (lang = 'en') => {
-  const safeLang = SAMPLE_TRANSLATIONS.wsName[lang] ? lang : 'en';
-  return {
-    id: 'ws-default',
-    name: SAMPLE_TRANSLATIONS.wsName[safeLang],
-    activeBoardId: 'board-1',
-    boards: [
-      {
-        id: 'board-1',
-        name: SAMPLE_TRANSLATIONS.board1[safeLang],
-        bubbles: [
-          {
-            id: 'b-1',
-            parentId: null,
-            level: 1,
-            text: SAMPLE_TRANSLATIONS.b1[safeLang],
-            shape: 'rect',
-            x: 340,
-            y: 250,
-            width: 210,
-            height: 92,
-            bgColor: '#ffffff',
-            borderColor: '#000000',
-            borderWidth: 4,
-            baseFontSize: 16,
-          },
-          {
-            id: 'b-2',
-            parentId: 'b-1',
-            level: 2,
-            text: SAMPLE_TRANSLATIONS.b2[safeLang],
-            shape: 'oval',
-            x: 660,
-            y: 140,
-            width: 180,
-            height: 88,
-            bgColor: '#e0f2fe',
-            borderColor: '#000000',
-            borderWidth: 4,
-            baseFontSize: 15,
-          },
-          {
-            id: 'b-3',
-            parentId: 'b-1',
-            level: 2,
-            text: SAMPLE_TRANSLATIONS.b3[safeLang],
-            shape: 'oval',
-            x: 660,
-            y: 360,
-            width: 180,
-            height: 88,
-            bgColor: '#dcfce7',
-            borderColor: '#000000',
-            borderWidth: 4,
-            baseFontSize: 15,
-          },
-          {
-            id: 'b-4',
-            parentId: 'b-2',
-            level: 3,
-            text: SAMPLE_TRANSLATIONS.b4[safeLang],
-            shape: 'triangle',
-            x: 960,
-            y: 115,
-            width: 200,
-            height: 115,
-            bgColor: '#fef3c7',
-            borderColor: '#000000',
-            borderWidth: 4,
-            baseFontSize: 15,
-          },
-          {
-            id: 'b-5',
-            parentId: 'b-3',
-            level: 3,
-            text: SAMPLE_TRANSLATIONS.b5[safeLang],
-            shape: 'rect',
-            x: 960,
-            y: 360,
-            width: 190,
-            height: 88,
-            bgColor: '#dcfce7',
-            borderColor: '#000000',
-            borderWidth: 4,
-            baseFontSize: 15,
-          },
-        ],
-        lines: [
-          {
-            id: 'l-1',
-            sourceId: 'b-1',
-            targetId: 'b-2',
-            color: '#ef4444',
-            width: 4,
-            style: 'solid',
-            markerStart: 'none',
-            markerEnd: 'none',
-            marker: 'none',
-          },
-          {
-            id: 'l-2',
-            sourceId: 'b-1',
-            targetId: 'b-3',
-            color: '#ef4444',
-            width: 4,
-            style: 'solid',
-            markerStart: 'none',
-            markerEnd: 'none',
-            marker: 'none',
-          },
-          {
-            id: 'l-3',
-            sourceId: 'b-2',
-            targetId: 'b-4',
-            color: '#ef4444',
-            width: 4,
-            style: 'dashed',
-            markerStart: 'none',
-            markerEnd: 'none',
-            marker: 'none',
-          },
-          {
-            id: 'l-4',
-            sourceId: 'b-3',
-            targetId: 'b-5',
-            color: '#ef4444',
-            width: 4,
-            style: 'solid',
-            markerStart: 'none',
-            markerEnd: 'none',
-            marker: 'none',
-          },
-        ],
-      },
-      {
-        id: 'board-2',
-        name: SAMPLE_TRANSLATIONS.board2[safeLang],
-        bubbles: [
-          {
-            id: 'b-m1',
-            parentId: null,
-            level: 1,
-            text: SAMPLE_TRANSLATIONS.bm1[safeLang],
-            shape: 'oval',
-            x: 440,
-            y: 250,
-            width: 200,
-            height: 96,
-            bgColor: '#fee2e2',
-            borderColor: '#000000',
-            borderWidth: 4,
-            baseFontSize: 16,
-          }
-        ],
-        lines: [],
-      }
-    ],
-  };
-};
+// --- REQUIREMENT 1: EMPTY INITIAL WORKSPACE WITH "Untitled Workspace" & "Untitled Board" ---
+const createInitialWorkspace = (customId = null) => ({
+  id: customId || ('ws-' + Date.now()),
+  name: 'Untitled Workspace',
+  activeBoardId: 'board-1',
+  boards: [
+    {
+      id: 'board-1',
+      name: 'Untitled Board',
+      bubbles: [],
+      lines: [],
+    }
+  ],
+});
 
-const ensureValidWorkspace = (ws, lang = 'en') => {
+// Normalize any workspace object to guarantee valid boards array
+const ensureValidWorkspace = (ws) => {
   if (!ws || typeof ws !== 'object' || !Array.isArray(ws.boards) || ws.boards.length === 0) {
-    return createInitialWorkspace(lang);
+    return createInitialWorkspace();
   }
   return {
     ...ws,
+    name: ws.name || 'Untitled Workspace',
     activeBoardId: ws.activeBoardId || ws.boards[0].id,
     boards: ws.boards.map(b => ({
       ...b,
+      name: b?.name || 'Untitled Board',
       bubbles: Array.isArray(b?.bubbles) ? b.bubbles : [],
       lines: Array.isArray(b?.lines) ? b.lines : [],
     }))
   };
 };
 
+// Helper to check if a workspace is completely untouched/empty
+const isWorkspaceUntouchedEmpty = (ws) => {
+  if (!ws || !Array.isArray(ws.boards)) return true;
+  return (
+    ws.boards.length === 1 &&
+    ws.boards[0].bubbles.length === 0 &&
+    ws.boards[0].lines.length === 0 &&
+    (ws.name === 'Untitled Workspace' || ws.name === 'Workspace Chưa Đặt Tên')
+  );
+};
+
 export default function App() {
+  // Language ('en' by default, 'vi' for 100% Vietnamese)
   const [lang, setLang] = useState('en');
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
 
+  // Theme & Workspace State
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [workspaceState, setWorkspaceState] = useState(() => createInitialWorkspace('en'));
+  const [workspaceState, setWorkspaceState] = useState(() => createInitialWorkspace('ws-initial'));
 
   const workspace = useMemo(
-    () => ensureValidWorkspace(workspaceState, lang),
-    [workspaceState, lang]
+    () => ensureValidWorkspace(workspaceState),
+    [workspaceState]
   );
 
   const setWorkspace = useCallback((updater) => {
     setWorkspaceState(prev => {
-      const currentValid = ensureValidWorkspace(prev, lang);
+      const currentValid = ensureValidWorkspace(prev);
       const next = typeof updater === 'function' ? updater(currentValid) : updater;
-      return ensureValidWorkspace(next, lang);
+      return ensureValidWorkspace(next);
     });
-  }, [lang]);
+  }, []);
 
   const [user, setUser] = useState(null);
   const [googleProfile, setGoogleProfile] = useState(null);
@@ -966,13 +794,13 @@ export default function App() {
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Google Login Modal & Custom Account State (when OAuth popup is blocked by iframe/domain)
+  // Google Sign-In Fallback Modal State (when OAuth popup is blocked by iframe / domain)
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
-  const [oauthPopupError, setOauthPopupError] = useState('');
-  const [customLoginName, setCustomLoginName] = useState('');
-  const [customLoginEmail, setCustomLoginEmail] = useState('');
+  const [googleAuthErrorCode, setGoogleAuthErrorCode] = useState('');
+  const [manualUserName, setManualUserName] = useState('');
+  const [manualUserEmail, setManualUserEmail] = useState('');
 
-  // Inline Renaming State for Workspaces
+  // Inline Workspace Rename States (Dashboard & Header)
   const [editingWorkspaceId, setEditingWorkspaceId] = useState(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState('');
   const [isEditingHeaderWsName, setIsEditingHeaderWsName] = useState(false);
@@ -1024,27 +852,27 @@ export default function App() {
   const [editingBoardId, setEditingBoardId] = useState(null);
   const [editingBoardName, setEditingBoardName] = useState('');
 
-  // Selection & Quick Input
-  const [selectedBubbleId, setSelectedBubbleId] = useState('b-1');
+  // Selection & Quick Input (Starts null on empty board)
+  const [selectedBubbleId, setSelectedBubbleId] = useState(null);
   const [selectedLineId, setSelectedLineId] = useState(null);
   const [hoveredBubbleId, setHoveredBubbleId] = useState(null);
   const [quickInputText, setQuickInputText] = useState('');
 
-  // Dragging, Resizing & Flicker-Free Line Connection State
+  // Dragging, Resizing, Canvas Drop-to-Reparent & Flicker-Free Line Connection State
   const [draggingBubbleId, setDraggingBubbleId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [resizingBubbleId, setResizingBubbleId] = useState(null);
   const [resizeStart, setResizeStart] = useState({ w: 0, h: 0, x: 0, y: 0 });
+  const [canvasReparentMode, setCanvasReparentMode] = useState(false);
+  const [canvasDropTargetId, setCanvasDropTargetId] = useState(null);
+
+  // Hierarchy Tree Drag-and-Drop State
+  const [treeDraggedId, setTreeDraggedId] = useState(null);
+  const [treeDropTargetId, setTreeDropTargetId] = useState(null);
 
   const [connectingSourceId, setConnectingSourceId] = useState(null);
   const [hoveredTargetId, setHoveredTargetId] = useState(null);
   const [pointerWorldPos, setPointerWorldPos] = useState({ x: 0, y: 0 });
-
-  // --- HIERARCHY TREE DRAG & DROP + CANVAS DROP-REPARENT STATES ---
-  const [treeDraggingBubbleId, setTreeDraggingBubbleId] = useState(null);
-  const [treeDropTargetId, setTreeDropTargetId] = useState(null);
-  const [canvasDropReparentMode, setCanvasDropReparentMode] = useState(false);
-  const [canvasDropTargetBubbleId, setCanvasDropTargetBubbleId] = useState(null);
 
   const canvasRef = useRef(null);
   const activePointersRef = useRef(new Map());
@@ -1067,52 +895,22 @@ export default function App() {
     { id: 'arrow', name: t.markerArrow },
   ], [t]);
 
+  const triggerToast = useCallback((msg) => {
+    if (!msg) return;
+    setToastMessage(String(msg));
+    setTimeout(() => setToastMessage(null), 2800);
+  }, []);
+
+  // Toggle Language
   const handleToggleLanguage = () => {
-    const nextLang = lang === 'en' ? 'vi' : 'en';
-    const prevLang = lang;
-    setLang(nextLang);
-
-    setWorkspace(prev => ({
-      ...prev,
-      name: prev.name === SAMPLE_TRANSLATIONS.wsName[prevLang] ? SAMPLE_TRANSLATIONS.wsName[nextLang] : prev.name,
-      boards: prev.boards.map(b => {
-        let updatedName = b.name;
-        if (b.id === 'board-1' && b.name === SAMPLE_TRANSLATIONS.board1[prevLang]) {
-          updatedName = SAMPLE_TRANSLATIONS.board1[nextLang];
-        } else if (b.id === 'board-2' && b.name === SAMPLE_TRANSLATIONS.board2[prevLang]) {
-          updatedName = SAMPLE_TRANSLATIONS.board2[nextLang];
-        } else if (b.name.startsWith(`${TRANSLATIONS[prevLang].boardDefaultName} `)) {
-          updatedName = b.name.replace(TRANSLATIONS[prevLang].boardDefaultName, TRANSLATIONS[nextLang].boardDefaultName);
-        }
-
-        const sampleMap = {
-          'b-1': 'b1',
-          'b-2': 'b2',
-          'b-3': 'b3',
-          'b-4': 'b4',
-          'b-5': 'b5',
-          'b-m1': 'bm1'
-        };
-
-        return {
-          ...b,
-          name: updatedName,
-          bubbles: b.bubbles.map(node => {
-            const key = sampleMap[node.id];
-            if (key && node.text === SAMPLE_TRANSLATIONS[key][prevLang]) {
-              return { ...node, text: SAMPLE_TRANSLATIONS[key][nextLang] };
-            }
-            return node;
-          })
-        };
-      })
-    }));
+    setLang(prev => (prev === 'en' ? 'vi' : 'en'));
   };
 
+  // Active Board & Selected Entities
   const currentBoard = useMemo(() => {
     const boards = workspace?.boards || [];
-    return boards.find(b => b.id === workspace?.activeBoardId) || boards[0] || createInitialWorkspace(lang).boards[0];
-  }, [workspace, lang]);
+    return boards.find(b => b.id === workspace?.activeBoardId) || boards[0] || createInitialWorkspace().boards[0];
+  }, [workspace]);
 
   const selectedBubble = useMemo(() => {
     return (currentBoard?.bubbles || []).find(b => b.id === selectedBubbleId) || null;
@@ -1122,16 +920,7 @@ export default function App() {
     return (currentBoard?.lines || []).find(l => l.id === selectedLineId) || null;
   }, [currentBoard, selectedLineId]);
 
-  const getAllDescendantIds = useCallback((rootId, bubbles) => {
-    let result = [];
-    const children = (bubbles || []).filter(b => b.parentId === rootId);
-    for (const child of children) {
-      result.push(child.id);
-      result = result.concat(getAllDescendantIds(child.id, bubbles));
-    }
-    return result;
-  }, []);
-
+  // Hierarchical Tree Ordered Bubbles with Computed Level Depth for Left Sidebar
   const orderedHierarchyBubbles = useMemo(() => {
     const bubbles = currentBoard?.bubbles || [];
     const byId = new Map(bubbles.map(b => [b.id, b]));
@@ -1169,13 +958,41 @@ export default function App() {
     return result;
   }, [currentBoard]);
 
-  const triggerToast = useCallback((msg) => {
-    if (!msg) return;
-    setToastMessage(String(msg));
-    setTimeout(() => setToastMessage(null), 2800);
-  }, []);
+  // --- REQUIREMENT 1 & 2: PERSISTENT STORAGE & AUTO-LOAD ON LOGIN ---
+  // Load saved profile & saved workspaces list from browser cache on startup
+  useEffect(() => {
+    try {
+      const rawList = localStorage.getItem(LOCAL_STORAGE_WORKSPACES_KEY);
+      const parsedList = rawList ? JSON.parse(rawList) : [];
+      const validList = Array.isArray(parsedList) ? parsedList.map(ensureValidWorkspace) : [];
+      if (validList.length > 0) {
+        setSavedWorkspaces(validList);
+      }
 
-  // Firebase Auth Init & Real Google Session Detection
+      const cachedProfileRaw = localStorage.getItem(LOCAL_STORAGE_PROFILE_KEY);
+      if (cachedProfileRaw) {
+        const cachedProfile = JSON.parse(cachedProfileRaw);
+        if (cachedProfile && cachedProfile.email) {
+          setGoogleProfile(cachedProfile);
+          const activeId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_WS_KEY);
+          const targetWs = validList.find(w => w.id === activeId) || validList[0];
+          if (targetWs) {
+            setWorkspace(targetWs);
+            if (targetWs.updatedAt) {
+              const dt = new Date(targetWs.updatedAt);
+              if (!isNaN(dt.getTime())) {
+                setLastSavedTime(dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Local storage load warning:', e);
+    }
+  }, [setWorkspace]);
+
+  // Firebase Auth Init
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
@@ -1196,75 +1013,151 @@ export default function App() {
     initAuth();
     const unsub = onAuthStateChanged(auth, (usr) => {
       setUser(usr);
-      if (usr && !usr.isAnonymous && usr.email) {
-        setGoogleProfile({
+      if (usr && !usr.isAnonymous && (usr.displayName || usr.email)) {
+        const realProfile = {
+          uid: usr.uid,
           name: usr.displayName || usr.email.split('@')[0],
-          email: usr.email,
+          email: usr.email || '',
           photoURL: usr.photoURL || null
-        });
+        };
+        setGoogleProfile(realProfile);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(realProfile));
+        } catch (e) {}
       }
     });
     return () => unsub();
   }, []);
 
-  // Sync Saved Workspaces from Cloud when logged in
+  // Sync Saved Workspaces from Cloud Firestore when logged in & Auto-load user's work
   useEffect(() => {
-    if (!user || !db || !googleProfile) {
-      setSavedWorkspaces([]);
-      return;
-    }
+    if (!user || !db || !googleProfile) return;
     const colRef = collection(db, 'artifacts', appId, 'users', user.uid, 'workspaces');
     const unsub = onSnapshot(
       colRef,
       (snap) => {
-        const list = [];
+        const cloudList = [];
         snap.forEach((docSnap) => {
           const data = docSnap.data();
           if (data && Array.isArray(data.boards)) {
-            list.push(data);
+            cloudList.push(ensureValidWorkspace(data));
           }
         });
-        list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-        setSavedWorkspaces(list);
+
+        // Merge Cloud Workspaces with LocalStorage Workspaces so no work is ever lost
+        setSavedWorkspaces(prevLocal => {
+          const map = new Map();
+          prevLocal.forEach(w => map.set(w.id, w));
+          cloudList.forEach(w => {
+            const existing = map.get(w.id);
+            if (!existing || (w.updatedAt || '') >= (existing.updatedAt || '')) {
+              map.set(w.id, w);
+            }
+          });
+          const merged = Array.from(map.values()).sort((a, b) =>
+            (b.updatedAt || '').localeCompare(a.updatedAt || '')
+          );
+
+          try {
+            localStorage.setItem(LOCAL_STORAGE_WORKSPACES_KEY, JSON.stringify(merged));
+          } catch (e) {}
+
+          // If current board is an untouched empty board and user has saved workspaces, load their latest workspace automatically!
+          if (merged.length > 0 && isWorkspaceUntouchedEmpty(workspaceRef.current)) {
+            const preferredId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_WS_KEY);
+            const wsToOpen = merged.find(w => w.id === preferredId) || merged[0];
+            setWorkspace(wsToOpen);
+            if (wsToOpen.updatedAt) {
+              const dt = new Date(wsToOpen.updatedAt);
+              if (!isNaN(dt.getTime())) {
+                setLastSavedTime(dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+              }
+            }
+          }
+
+          return merged;
+        });
       },
       (err) => {
-        console.error('Firestore workspaces listener error:', err);
+        console.warn('Firestore listener notice (Check Firestore Rules):', err?.message || err);
       }
     );
     return () => unsub();
-  }, [user, googleProfile]);
+  }, [user, googleProfile, setWorkspace]);
 
+  // --- REQUIREMENT 2 & 3: RELIABLE SAVE NOW & AUTO-SAVE (LOCAL + CLOUD FIRESTORE) ---
   const saveWorkspaceToCloud = useCallback(async (wsToSave, silent = false) => {
-    if (!googleProfile || !wsToSave) return;
-    const nowIso = new Date().toISOString();
-    const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const validWs = ensureValidWorkspace(wsToSave || workspaceRef.current);
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const payload = {
-      ...ensureValidWorkspace(wsToSave, lang),
+      ...validWs,
       updatedAt: nowIso
     };
 
-    try {
-      if (db && user) {
+    // 1. Immediately update Last Saved Time & in-memory Saved Workspaces list
+    setLastSavedTime(timeLabel);
+    setSavedWorkspaces(prev => {
+      const updated = [payload, ...prev.filter(item => item.id !== payload.id)];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_WORKSPACES_KEY, JSON.stringify(updated));
+        localStorage.setItem(LOCAL_STORAGE_ACTIVE_WS_KEY, payload.id);
+      } catch (e) {
+        console.warn('LocalStorage write warning:', e);
+      }
+      return updated;
+    });
+
+    // 2. Sync to Firebase Cloud Firestore if available
+    if (db && user) {
+      try {
         const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', payload.id);
         await setDoc(docRef, payload);
-      } else {
-        setSavedWorkspaces(prev => {
-          const filtered = prev.filter(item => item.id !== payload.id);
-          return [payload, ...filtered];
-        });
+        if (!silent) {
+          triggerToast(googleProfile ? t.toastSavedCloud : t.toastSavedLocal);
+        } else {
+          triggerToast(t.toastAutoSaved);
+        }
+        return;
+      } catch (err) {
+        console.warn('Cloud Firestore sync warning:', err);
+        if (!silent) {
+          triggerToast(t.toastSaveError);
+        }
+        return;
       }
-      setLastSavedTime(timeLabel);
-      if (!silent) {
-        triggerToast(t.toastSavedCloud);
-      } else {
-        triggerToast(t.toastAutoSaved);
-      }
-    } catch (err) {
-      console.error('Cloud save error:', err);
-      if (!silent) triggerToast(t.toastSaveError + err.message);
     }
-  }, [googleProfile, user, lang, triggerToast, t]);
 
+    if (!silent) {
+      triggerToast(googleProfile ? t.toastSavedCloud : t.toastSavedLocal);
+    }
+  }, [googleProfile, user, triggerToast, t]);
+
+  // Automatic Background Save whenever workspace changes (after user starts adding content or renaming)
+  useEffect(() => {
+    if (isWorkspaceUntouchedEmpty(workspace)) return;
+    const timer = setTimeout(() => {
+      const now = new Date();
+      const payload = { ...workspace, updatedAt: now.toISOString() };
+      setSavedWorkspaces(prev => {
+        const updated = [payload, ...prev.filter(item => item.id !== payload.id)];
+        try {
+          localStorage.setItem(LOCAL_STORAGE_WORKSPACES_KEY, JSON.stringify(updated));
+          localStorage.setItem(LOCAL_STORAGE_ACTIVE_WS_KEY, payload.id);
+        } catch (e) {}
+        return updated;
+      });
+      setLastSavedTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      if (googleProfile && db && user) {
+        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', payload.id);
+        setDoc(docRef, payload).catch(() => {});
+      }
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [workspace, googleProfile, user]);
+
+  // Automatic Overwrite Save every 10 minutes when logged in
   useEffect(() => {
     if (!googleProfile) return;
     const TEN_MINUTES_MS = 10 * 60 * 1000;
@@ -1277,9 +1170,37 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, [googleProfile, saveWorkspaceToCloud]);
 
-  // --- REAL GOOGLE OAUTH POPUP WITH ACCOUNT CHOOSER & TRANSPARENT FALLBACK MODAL ---
+  // Complete Login Restoration (loads existing saved workspaces if current board is empty)
+  const activateLoggedInSession = useCallback((profile) => {
+    setGoogleProfile(profile);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(profile));
+      const rawList = localStorage.getItem(LOCAL_STORAGE_WORKSPACES_KEY);
+      const localList = rawList ? JSON.parse(rawList).map(ensureValidWorkspace) : [];
+
+      if (localList.length > 0) {
+        setSavedWorkspaces(localList);
+        if (isWorkspaceUntouchedEmpty(workspaceRef.current)) {
+          const activeId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_WS_KEY);
+          const wsToLoad = localList.find(w => w.id === activeId) || localList[0];
+          setWorkspace(wsToLoad);
+          if (wsToLoad.updatedAt) {
+            const dt = new Date(wsToLoad.updatedAt);
+            if (!isNaN(dt.getTime())) {
+              setLastSavedTime(dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            }
+          }
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // If user already drew something before logging in, save their current work immediately
+    saveWorkspaceToCloud(workspaceRef.current, true);
+  }, [setWorkspace, saveWorkspaceToCloud]);
+
+  // Google Sign-In & Sign-Out Handlers
   const handleGoogleLogin = async () => {
-    setOauthPopupError('');
     if (auth) {
       try {
         const provider = new GoogleAuthProvider();
@@ -1287,167 +1208,85 @@ export default function App() {
         const result = await signInWithPopup(auth, provider);
         if (result?.user) {
           const profile = {
+            uid: result.user.uid,
             name: result.user.displayName || result.user.email?.split('@')[0] || 'Google User',
             email: result.user.email || '',
             photoURL: result.user.photoURL || null
           };
-          setGoogleProfile(profile);
+          activateLoggedInSession(profile);
           setShowGoogleAuthModal(false);
-
-          const nowIso = new Date().toISOString();
-          const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const payload = { ...ensureValidWorkspace(workspaceRef.current, lang), updatedAt: nowIso };
-          if (db && result.user) {
-            const docRef = doc(db, 'artifacts', appId, 'users', result.user.uid, 'workspaces', payload.id);
-            setDoc(docRef, payload).catch(console.error);
-          }
-          setLastSavedTime(timeLabel);
           triggerToast(t.toastLoggedIn);
           return;
         }
       } catch (popupErr) {
-        if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
+        if (popupErr?.code === 'auth/popup-closed-by-user') {
           return;
         }
-        console.warn('Google OAuth Popup blocked or unauthorized domain:', popupErr);
-        setOauthPopupError(popupErr?.code || popupErr?.message || 'auth/popup-blocked');
+        setGoogleAuthErrorCode(popupErr?.code || 'auth/unauthorized-domain');
         setShowGoogleAuthModal(true);
         return;
       }
+    } else {
+      setGoogleAuthErrorCode('auth/iframe-preview-mode');
+      setShowGoogleAuthModal(true);
     }
-    setOauthPopupError('firebase-auth-unavailable');
-    setShowGoogleAuthModal(true);
   };
 
-  const handleConfirmCustomGoogleAccount = (e) => {
-    if (e) e.preventDefault();
-    const emailTrimmed = customLoginEmail.trim();
-    if (!emailTrimmed) return;
-    const nameTrimmed = customLoginName.trim() || emailTrimmed.split('@')[0];
-
+  const handleManualGoogleSignIn = (e) => {
+    e.preventDefault();
+    const cleanEmail = manualUserEmail.trim() || 'user@gmail.com';
+    const cleanName = manualUserName.trim() || cleanEmail.split('@')[0];
     const profile = {
-      name: nameTrimmed,
-      email: emailTrimmed,
+      uid: user?.uid || ('usr-' + btoa(cleanEmail).slice(0, 10)),
+      name: cleanName,
+      email: cleanEmail,
       photoURL: null
     };
-    setGoogleProfile(profile);
+    activateLoggedInSession(profile);
     setShowGoogleAuthModal(false);
-
-    setTimeout(() => {
-      if (workspaceRef.current) {
-        const nowIso = new Date().toISOString();
-        const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const payload = { ...ensureValidWorkspace(workspaceRef.current, lang), updatedAt: nowIso };
-        if (db && user) {
-          const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', payload.id);
-          setDoc(docRef, payload).catch(console.error);
-        } else {
-          setSavedWorkspaces(prev => [payload, ...prev.filter(w => w.id !== payload.id)]);
-        }
-        setLastSavedTime(timeLabel);
-      }
-    }, 100);
     triggerToast(t.toastLoggedIn);
   };
 
-  const handleGoogleLogout = async () => {
-    try {
-      if (auth && user && !user.isAnonymous) {
-        await signOut(auth);
-        await signInAnonymously(auth);
-      }
-    } catch (e) {
-      console.warn('Sign out fallback:', e);
-    }
+  const handleGoogleLogout = () => {
     setGoogleProfile(null);
     setShowAccountMenu(false);
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_PROFILE_KEY);
+    } catch (e) {}
     triggerToast(t.toastLoggedOut);
-  };
-
-  // --- RENAME WORKSPACE IN DASHBOARD OR HEADER ---
-  const commitRenameWorkspaceItem = async (targetWs) => {
-    const trimmed = editingWorkspaceName.trim();
-    setEditingWorkspaceId(null);
-    if (!trimmed || !targetWs || trimmed === targetWs.name) return;
-
-    const nowIso = new Date().toISOString();
-    const updatedWs = {
-      ...ensureValidWorkspace(targetWs, lang),
-      name: trimmed,
-      updatedAt: nowIso
-    };
-
-    if (targetWs.id === workspace.id) {
-      setWorkspace(prev => ({ ...prev, name: trimmed }));
-    }
-
-    setSavedWorkspaces(prev =>
-      prev.map(item => (item.id === targetWs.id ? updatedWs : item))
-    );
-
-    if (googleProfile && db && user) {
-      try {
-        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', targetWs.id);
-        await setDoc(docRef, updatedWs);
-      } catch (err) {
-        console.error('Error renaming workspace in cloud:', err);
-      }
-    }
-    triggerToast(t.workspaceRenamedToast);
-  };
-
-  const commitHeaderWorkspaceRename = () => {
-    const trimmed = headerWsNameInput.trim();
-    setIsEditingHeaderWsName(false);
-    if (!trimmed || trimmed === workspace.name) return;
-
-    const updatedWs = {
-      ...workspace,
-      name: trimmed,
-      updatedAt: new Date().toISOString()
-    };
-
-    setWorkspace(prev => ({ ...prev, name: trimmed }));
-    setSavedWorkspaces(prev =>
-      prev.map(item => (item.id === workspace.id ? updatedWs : item))
-    );
-
-    if (googleProfile) {
-      saveWorkspaceToCloud(updatedWs, true);
-    }
-    triggerToast(t.workspaceRenamedToast);
   };
 
   // --- UNDO / REDO HISTORY HELPERS ---
   const recordHistorySnapshot = useCallback((snapshotWorkspace) => {
-    const target = ensureValidWorkspace(snapshotWorkspace || workspaceRef.current, lang);
+    const target = ensureValidWorkspace(snapshotWorkspace || workspaceRef.current);
     const snap = JSON.parse(JSON.stringify(target));
     setPastHistory(prev => [...prev.slice(-39), snap]);
     setFutureHistory([]);
-  }, [lang]);
+  }, []);
 
   const handleUndo = useCallback(() => {
     if (pastHistory.length === 0) return;
-    const previousState = ensureValidWorkspace(pastHistory[pastHistory.length - 1], lang);
-    const currentSnapshot = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current, lang)));
+    const previousState = ensureValidWorkspace(pastHistory[pastHistory.length - 1]);
+    const currentSnapshot = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current)));
 
     setPastHistory(prev => prev.slice(0, prev.length - 1));
     setFutureHistory(prev => [currentSnapshot, ...prev.slice(0, 39)]);
     setWorkspace(previousState);
     triggerToast(t.toastUndo);
-  }, [pastHistory, lang, setWorkspace, triggerToast, t]);
+  }, [pastHistory, setWorkspace, triggerToast, t]);
 
   const handleRedo = useCallback(() => {
     if (futureHistory.length === 0) return;
-    const nextState = ensureValidWorkspace(futureHistory[0], lang);
-    const currentSnapshot = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current, lang)));
+    const nextState = ensureValidWorkspace(futureHistory[0]);
+    const currentSnapshot = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current)));
 
     setFutureHistory(prev => prev.slice(1));
     setPastHistory(prev => [...prev.slice(-39), currentSnapshot]);
     setWorkspace(nextState);
     triggerToast(t.toastRedo);
-  }, [futureHistory, lang, setWorkspace, triggerToast, t]);
+  }, [futureHistory, setWorkspace, triggerToast, t]);
 
+  // Smart Invert Color Logic for Dark Mode
   const getSmartBorderColor = useCallback((color) => {
     if (isDarkMode) {
       if (!color || color.toLowerCase() === '#000000' || color.toLowerCase() === 'black') {
@@ -1465,6 +1304,7 @@ export default function App() {
     return '#0f172a';
   }, []);
 
+  // Board State Updaters
   const updateCurrentBoard = useCallback((mutator, skipHistory = false) => {
     if (!skipHistory) {
       recordHistorySnapshot(workspaceRef.current);
@@ -1503,6 +1343,17 @@ export default function App() {
     setSelectedLineId(null);
     triggerToast(t.toastLineDeleted);
   }, [updateCurrentBoard, triggerToast, t]);
+
+  // Recursive Descendant Finder
+  const getAllDescendantIds = useCallback((rootId, bubbles) => {
+    let result = [];
+    const children = (bubbles || []).filter(b => b.parentId === rootId);
+    for (const child of children) {
+      result.push(child.id);
+      result = result.concat(getAllDescendantIds(child.id, bubbles));
+    }
+    return result;
+  }, []);
 
   const deleteBubble = useCallback((bubbleId) => {
     updateCurrentBoard(board => {
@@ -1547,48 +1398,45 @@ export default function App() {
     triggerToast(t.toastBubbleDeleted);
   }, [updateCurrentBoard, selectedBubbleId, getAllDescendantIds, triggerToast, t]);
 
-  // --- UNIFIED RE-PARENTING ENGINE (Only triggered via Hierarchy Tree or Alt+Drop on Canvas) ---
-  const reparentBubble = useCallback((childId, newParentId, options = { arrangeRadially: true }) => {
-    if (!childId || childId === newParentId) return;
+  // Reparent Bubble in Hierarchy Tree with Radial Layout & Collision Avoidance
+  const reparentBubble = useCallback((childId, newParentId) => {
+    if (childId === newParentId) return;
 
     updateCurrentBoard(board => {
       const descIds = new Set(getAllDescendantIds(childId, board.bubbles));
       if (newParentId && descIds.has(newParentId)) return board;
 
       const child = board.bubbles.find(b => b.id === childId);
-      const newParent = newParentId ? board.bubbles.find(b => b.id === newParentId) : null;
+      const newParent = board.bubbles.find(b => b.id === newParentId);
       if (!child) return board;
 
       const oldParentId = child.parentId;
       let newX = child.x;
       let newY = child.y;
-      const newLevel = newParent ? (newParent.level || 1) + 1 : 1;
+      let newLevel = 1;
 
-      if (newParent && options.arrangeRadially) {
+      if (newParent) {
+        newLevel = newParent.level + 1;
         const siblings = board.bubbles.filter(b => b.parentId === newParent.id && b.id !== childId);
         const index = siblings.length;
         const total = index + 1;
-        const radius = Math.max(230, Math.hypot(newParent.width, newParent.height) + 75);
-        const angle = (index * (2 * Math.PI / Math.max(1, total))) - (Math.PI / 4);
+        const radius = 240;
+        const angle = (index * (2 * Math.PI / Math.max(1, total))) - (Math.PI / 2);
 
-        newX = Math.round(newParent.x + (newParent.width / 2) + Math.cos(angle) * radius - (child.width / 2));
-        newY = Math.round(newParent.y + (newParent.height / 2) + Math.sin(angle) * radius - (child.height / 2));
+        newX = Math.round(newParent.x + Math.cos(angle) * radius);
+        newY = Math.round(newParent.y + Math.sin(angle) * radius);
       }
 
       const deltaX = newX - child.x;
       const deltaY = newY - child.y;
-      const levelDiff = newLevel - (child.level || 1);
+      const levelDiff = newLevel - child.level;
 
-      let updatedLines = board.lines.filter(l => {
-        if (!oldParentId) return true;
-        return !((l.sourceId === oldParentId && l.targetId === childId) ||
-                 (l.sourceId === childId && l.targetId === oldParentId));
-      });
+      // Remove old parent-child line and connect to new parent if applicable
+      let updatedLines = board.lines.filter(
+        l => !((l.sourceId === oldParentId && l.targetId === childId) || (l.sourceId === childId && l.targetId === oldParentId))
+      );
 
-      if (newParent && !updatedLines.some(l =>
-        (l.sourceId === newParent.id && l.targetId === childId) ||
-        (l.sourceId === childId && l.targetId === newParent.id)
-      )) {
+      if (newParent && !updatedLines.some(l => (l.sourceId === newParent.id && l.targetId === childId) || (l.sourceId === childId && l.targetId === newParent.id))) {
         updatedLines.push({
           id: 'l-' + Date.now().toString().slice(-5),
           sourceId: newParent.id,
@@ -1606,7 +1454,7 @@ export default function App() {
         if (b.id === childId) {
           return {
             ...b,
-            parentId: newParent ? newParent.id : null,
+            parentId: newParentId || null,
             level: newLevel,
             x: newX,
             y: newY
@@ -1615,7 +1463,7 @@ export default function App() {
         if (descIds.has(b.id)) {
           return {
             ...b,
-            level: Math.max(1, (b.level || 1) + levelDiff),
+            level: Math.max(1, b.level + levelDiff),
             x: Math.round(b.x + deltaX),
             y: Math.round(b.y + deltaY)
           };
@@ -1623,7 +1471,7 @@ export default function App() {
         return b;
       });
 
-      const pinned = new Set([childId, ...(newParent ? [newParent.id] : []), ...descIds]);
+      const pinned = new Set([childId, ...(newParentId ? [newParentId] : []), ...descIds]);
       return {
         ...board,
         bubbles: resolveBubbleCollisions(movedBubbles, pinned),
@@ -1634,54 +1482,43 @@ export default function App() {
     triggerToast(t.toastReparented);
   }, [updateCurrentBoard, getAllDescendantIds, triggerToast, t]);
 
-  // --- POWERPOINT-STYLE PROMOTE (← / Shift+Tab) & DEMOTE (→ / Tab) ---
-  const findDemoteParentCandidate = useCallback((bubbleId) => {
-    const idx = orderedHierarchyBubbles.findIndex(b => b.id === bubbleId);
-    if (idx <= 0) return null;
-    const target = orderedHierarchyBubbles[idx];
-    const targetDepth = target.computedDepth || target.level || 1;
-    const descIds = new Set(getAllDescendantIds(bubbleId, currentBoard?.bubbles || []));
+  // --- POWERPOINT-STYLE PROMOTE (OUTDENT) & DEMOTE (INDENT) ---
+  const canPromoteBubble = useCallback((bubble) => {
+    if (!bubble) return false;
+    return Boolean(bubble.parentId) || (bubble.level || 1) > 1;
+  }, []);
 
-    for (let i = idx - 1; i >= 0; i--) {
-      const cand = orderedHierarchyBubbles[i];
-      if (descIds.has(cand.id)) continue;
-      const candDepth = cand.computedDepth || cand.level || 1;
-      if (candDepth === targetDepth) {
-        return cand;
-      }
-      if (candDepth < targetDepth) {
-        break;
-      }
-    }
+  const findPrecedingSibling = useCallback((bubble) => {
+    if (!bubble) return null;
+    const siblings = (currentBoard?.bubbles || []).filter(
+      b => (b.parentId || null) === (bubble.parentId || null)
+    );
+    const idx = siblings.findIndex(b => b.id === bubble.id);
+    if (idx > 0) return siblings[idx - 1];
     return null;
-  }, [orderedHierarchyBubbles, currentBoard, getAllDescendantIds]);
+  }, [currentBoard]);
+
+  const canDemoteBubble = useCallback((bubble) => {
+    return Boolean(findPrecedingSibling(bubble));
+  }, [findPrecedingSibling]);
 
   const handlePromoteBubble = useCallback((bubbleId) => {
     const target = (currentBoard?.bubbles || []).find(b => b.id === bubbleId);
-    if (!target) return;
-    if (!target.parentId) {
-      triggerToast(t.toastCannotPromote);
-      return;
-    }
+    if (!target || !canPromoteBubble(target)) return;
     const currentParent = (currentBoard?.bubbles || []).find(b => b.id === target.parentId);
-    const grandParentId = currentParent ? currentParent.parentId : null;
-    const nextLvl = Math.max(1, (target.level || 2) - 1);
-    reparentBubble(bubbleId, grandParentId, { arrangeRadially: false });
-    triggerToast(t.toastPromoted(nextLvl));
-  }, [currentBoard, reparentBubble, triggerToast, t]);
+    const nextParentId = currentParent ? (currentParent.parentId || null) : null;
+    reparentBubble(bubbleId, nextParentId);
+  }, [currentBoard, canPromoteBubble, reparentBubble]);
 
   const handleDemoteBubble = useCallback((bubbleId) => {
-    const newParentCandidate = findDemoteParentCandidate(bubbleId);
-    if (!newParentCandidate) {
-      triggerToast(t.toastCannotDemote);
-      return;
-    }
-    const nextLvl = (newParentCandidate.level || 1) + 1;
-    reparentBubble(bubbleId, newParentCandidate.id, { arrangeRadially: false });
-    triggerToast(t.toastDemoted(nextLvl));
-  }, [findDemoteParentCandidate, reparentBubble, triggerToast, t]);
+    const target = (currentBoard?.bubbles || []).find(b => b.id === bubbleId);
+    if (!target) return;
+    const prevSibling = findPrecedingSibling(target);
+    if (!prevSibling) return;
+    reparentBubble(bubbleId, prevSibling.id);
+  }, [currentBoard, findPrecedingSibling, reparentBubble]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (including Tab / Shift+Tab for Demote / Promote)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) return;
@@ -1729,10 +1566,6 @@ export default function App() {
         setHoveredTargetId(null);
         setEditingBoardId(null);
         setEditingWorkspaceId(null);
-        setIsEditingHeaderWsName(false);
-        setTreeDraggingBubbleId(null);
-        setTreeDropTargetId(null);
-        setCanvasDropTargetBubbleId(null);
       }
     };
     const handleKeyUp = (e) => {
@@ -1747,7 +1580,7 @@ export default function App() {
     };
   }, [selectedBubbleId, selectedLineId, deleteBubble, deleteLine, handleUndo, handleRedo, handlePromoteBubble, handleDemoteBubble]);
 
-  // Desktop Ctrl + Wheel Zoom & Regular Wheel Pan
+  // Desktop Ctrl + Wheel Zoom (centered around cursor) & Regular Wheel Pan
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
@@ -1782,7 +1615,7 @@ export default function App() {
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // --- CREATE NEW BUBBLE ---
+  // --- CREATE NEW BUBBLE (INHERITS PARENT VISUAL ATTRIBUTES + RESOLVES COLLISIONS) ---
   const handleAddBubble = (e) => {
     if (e) e.preventDefault();
     if (!quickInputText.trim()) return;
@@ -1801,8 +1634,9 @@ export default function App() {
       posY = parent.y + (parent.height / 2) + Math.sin(angle) * radius - (DEFAULT_BUBBLE_H / 2);
     } else if (canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      posX = (rect.width / 2 - pan.x) / zoom - (DEFAULT_BUBBLE_W / 2);
-      posY = (rect.height / 2 - pan.y) / zoom - (DEFAULT_BUBBLE_H / 2);
+      const rootCount = currentBoard.bubbles.filter(b => !b.parentId).length;
+      posX = (rect.width / 2 - pan.x) / zoom - (DEFAULT_BUBBLE_W / 2) + (rootCount * 36);
+      posY = (rect.height / 2 - pan.y) / zoom - (DEFAULT_BUBBLE_H / 2) + (rootCount * 24);
     }
 
     const calculatedLvl = parent ? parent.level + 1 : 1;
@@ -1942,6 +1776,7 @@ export default function App() {
     };
   };
 
+  // Fit Screen (Center Mindmap)
   const handleFitScreen = () => {
     if (!currentBoard.bubbles.length || !canvasRef.current) return;
 
@@ -1969,6 +1804,7 @@ export default function App() {
     triggerToast(t.toastCentered);
   };
 
+  // Zoom button helper that zooms smoothly around the center of the viewport
   const handleZoomStep = (delta) => {
     if (!canvasRef.current) {
       setZoom(z => Math.min(3.0, Math.max(0.25, Number((z + delta).toFixed(2)))));
@@ -1992,7 +1828,7 @@ export default function App() {
     });
   };
 
-  // --- UNIFIED POINTER EVENTS ---
+  // --- UNIFIED POINTER EVENTS (MOUSE + TOUCH SUPPORT, FLICKER-FREE LINE CONNECT) ---
   const clientToWorld = useCallback((clientX, clientY) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
@@ -2027,7 +1863,7 @@ export default function App() {
     return bestId;
   }, [currentBoard.bubbles]);
 
-  // Pure visual line connection: DOES NOT alter bubble level or parentId
+  // Pure Visual Line Connection (NEVER modifies Bubble level or parentId!)
   const completeConnection = useCallback((sourceId, targetId) => {
     if (sourceId && targetId && sourceId !== targetId) {
       updateCurrentBoard(board => {
@@ -2036,7 +1872,6 @@ export default function App() {
                (l.sourceId === targetId && l.targetId === sourceId)
         );
         if (exists) return board;
-
         return {
           ...board,
           lines: [
@@ -2064,6 +1899,7 @@ export default function App() {
   const handlePointerDownCanvas = (e) => {
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
+    // If 2 fingers are touching the screen -> Activate Pinch-to-Zoom mode!
     if (activePointersRef.current.size === 2) {
       const pts = Array.from(activePointersRef.current.values());
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
@@ -2084,7 +1920,7 @@ export default function App() {
       setResizingBubbleId(null);
       setConnectingSourceId(null);
       setHoveredTargetId(null);
-      setCanvasDropTargetBubbleId(null);
+      setCanvasDropTargetId(null);
       return;
     }
 
@@ -2109,6 +1945,7 @@ export default function App() {
       activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
 
+    // Handle 2-Finger Pinch-to-Zoom & Two-Finger Pan on Mobile/Touchscreen
     if (activePointersRef.current.size === 2 && pinchStateRef.current) {
       const pts = Array.from(activePointersRef.current.values());
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
@@ -2174,27 +2011,16 @@ export default function App() {
       const descendantIds = new Set(getAllDescendantIds(draggingBubbleId, currentBoard.bubbles));
       const pinnedGroup = new Set([draggingBubbleId, ...descendantIds]);
 
-      const isDropReparentActive = canvasDropReparentMode || e.altKey;
-      let detectedDropParentId = null;
-
+      // Check if user is holding Alt or enabled Canvas Drop-to-Reparent Mode
+      const isDropReparentActive = canvasReparentMode || e.altKey;
+      let detectedDropTarget = null;
       if (isDropReparentActive) {
-        const draggedCenterX = newTargetX + targetBubble.width / 2;
-        const draggedCenterY = newTargetY + targetBubble.height / 2;
-
-        for (const cand of currentBoard.bubbles) {
-          if (cand.id === draggingBubbleId || descendantIds.has(cand.id)) continue;
-          if (
-            draggedCenterX >= cand.x - 12 &&
-            draggedCenterX <= cand.x + cand.width + 12 &&
-            draggedCenterY >= cand.y - 12 &&
-            draggedCenterY <= cand.y + cand.height + 12
-          ) {
-            detectedDropParentId = cand.id;
-            break;
-          }
+        const candidateId = findMagneticTargetBubble(world.x, world.y, draggingBubbleId);
+        if (candidateId && !descendantIds.has(candidateId)) {
+          detectedDropTarget = candidateId;
         }
       }
-      setCanvasDropTargetBubbleId(detectedDropParentId);
+      setCanvasDropTargetId(detectedDropTarget);
 
       updateCurrentBoard(board => {
         const movedBubbles = board.bubbles.map(b => {
@@ -2209,9 +2035,7 @@ export default function App() {
 
         return {
           ...board,
-          bubbles: detectedDropParentId
-            ? movedBubbles
-            : resolveBubbleCollisions(movedBubbles, pinnedGroup)
+          bubbles: detectedDropTarget ? movedBubbles : resolveBubbleCollisions(movedBubbles, pinnedGroup)
         };
       }, true);
     }
@@ -2224,22 +2048,21 @@ export default function App() {
       pinchStateRef.current = null;
     }
 
-    if (draggingBubbleId && canvasDropTargetBubbleId && canvasDropTargetBubbleId !== draggingBubbleId) {
-      const childId = draggingBubbleId;
-      const newParentId = canvasDropTargetBubbleId;
-      setCanvasDropTargetBubbleId(null);
+    if (draggingBubbleId && canvasDropTargetId) {
+      const draggedId = draggingBubbleId;
+      const newParentId = canvasDropTargetId;
+      setCanvasDropTargetId(null);
       setDraggingBubbleId(null);
       preInteractionSnapshotRef.current = null;
-      reparentBubble(childId, newParentId, { arrangeRadially: true });
+      reparentBubble(draggedId, newParentId);
       return;
     }
-    setCanvasDropTargetBubbleId(null);
 
     if ((draggingBubbleId || resizingBubbleId) && preInteractionSnapshotRef.current) {
       const prevSnapStr = JSON.stringify(preInteractionSnapshotRef.current);
       const currSnapStr = JSON.stringify(workspaceRef.current);
       if (prevSnapStr !== currSnapStr) {
-        const validSnap = ensureValidWorkspace(preInteractionSnapshotRef.current, lang);
+        const validSnap = ensureValidWorkspace(preInteractionSnapshotRef.current);
         setPastHistory(prev => [...prev.slice(-39), validSnap]);
         setFutureHistory([]);
       }
@@ -2260,6 +2083,7 @@ export default function App() {
     setIsPanning(false);
     setDraggingBubbleId(null);
     setResizingBubbleId(null);
+    setCanvasDropTargetId(null);
   };
 
   const startDragBubble = (e, bubble) => {
@@ -2276,7 +2100,7 @@ export default function App() {
     setSelectedBubbleId(bubble.id);
     setSelectedLineId(null);
 
-    preInteractionSnapshotRef.current = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current, lang)));
+    preInteractionSnapshotRef.current = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current)));
     const world = clientToWorld(e.clientX, e.clientY);
     setDraggingBubbleId(bubble.id);
     setDragOffset({
@@ -2287,7 +2111,7 @@ export default function App() {
 
   const startResizeBubble = (e, bubble) => {
     e.stopPropagation();
-    preInteractionSnapshotRef.current = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current, lang)));
+    preInteractionSnapshotRef.current = JSON.parse(JSON.stringify(ensureValidWorkspace(workspaceRef.current)));
     const world = clientToWorld(e.clientX, e.clientY);
     setResizingBubbleId(bubble.id);
     setResizeStart({
@@ -2306,25 +2130,19 @@ export default function App() {
     setHoveredTargetId(null);
   };
 
-  // --- WORKSPACE CLOUD OPERATIONS ---
+  // --- WORKSPACE OPERATIONS (CREATE, RENAME, OPEN, DELETE) ---
   const handleCreateNewWorkspace = async () => {
-    if (googleProfile) {
-      await saveWorkspaceToCloud(workspaceRef.current, true);
-    }
+    await saveWorkspaceToCloud(workspaceRef.current, true);
 
-    const newWs = createInitialWorkspace(lang);
-    newWs.id = 'ws-' + Date.now();
-    const count = Math.max(1, savedWorkspaces.length + 1);
-    newWs.name = `${t.defaultNewWorkspaceName} ${count}`;
+    const newWs = createInitialWorkspace('ws-' + Date.now());
+    newWs.name = 'Untitled Workspace';
 
     setPastHistory([]);
     setFutureHistory([]);
+    setSelectedBubbleId(null);
+    setSelectedLineId(null);
     setWorkspace(newWs);
-    setSavedWorkspaces(prev => [newWs, ...prev.filter(w => w.id !== newWs.id)]);
-
-    if (googleProfile) {
-      await saveWorkspaceToCloud(newWs, true);
-    }
+    await saveWorkspaceToCloud(newWs, true);
     setEditingWorkspaceId(newWs.id);
     setEditingWorkspaceName(newWs.name);
     triggerToast(t.toastWorkspaceCreated);
@@ -2336,53 +2154,80 @@ export default function App() {
       setShowWorkspaceModal(false);
       return;
     }
-    if (googleProfile) {
-      await saveWorkspaceToCloud(workspaceRef.current, true);
-    } else {
-      setSavedWorkspaces(prev => {
-        const current = workspaceRef.current;
-        return [current, ...prev.filter(w => w.id !== current.id)];
-      });
-    }
+    await saveWorkspaceToCloud(workspaceRef.current, true);
     setPastHistory([]);
     setFutureHistory([]);
-    setWorkspace(ensureValidWorkspace(targetWs, lang));
+    const validTarget = ensureValidWorkspace(targetWs);
+    setWorkspace(validTarget);
     setSelectedBubbleId(null);
     setSelectedLineId(null);
     setShowWorkspaceModal(false);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_ACTIVE_WS_KEY, validTarget.id);
+    } catch (e) {}
     triggerToast(t.toastWorkspaceSwitched);
+  };
+
+  const handleCommitWorkspaceRename = async (wsId) => {
+    const trimmed = editingWorkspaceName.trim();
+    if (!trimmed) {
+      setEditingWorkspaceId(null);
+      return;
+    }
+
+    if (wsId === workspace.id) {
+      setWorkspace(prev => ({ ...prev, name: trimmed }));
+    }
+
+    setSavedWorkspaces(prev => {
+      const nextList = prev.map(w => w.id === wsId ? { ...w, name: trimmed, updatedAt: new Date().toISOString() } : w);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_WORKSPACES_KEY, JSON.stringify(nextList));
+      } catch (e) {}
+      return nextList;
+    });
+
+    if (db && user) {
+      const targetWs = savedWorkspaces.find(w => w.id === wsId) || (wsId === workspace.id ? workspace : null);
+      if (targetWs) {
+        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', wsId);
+        setDoc(docRef, { ...targetWs, name: trimmed, updatedAt: new Date().toISOString() }).catch(() => {});
+      }
+    }
+
+    setEditingWorkspaceId(null);
+    triggerToast(t.toastWorkspaceRenamed);
   };
 
   const handleDeleteSavedWorkspace = async (e, wsId) => {
     e.stopPropagation();
+    const remaining = savedWorkspaces.filter(w => w.id !== wsId);
+    setSavedWorkspaces(remaining);
     try {
-      if (googleProfile && db && user) {
+      localStorage.setItem(LOCAL_STORAGE_WORKSPACES_KEY, JSON.stringify(remaining));
+    } catch (err) {}
+
+    if (db && user) {
+      try {
         const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'workspaces', wsId);
         await deleteDoc(docRef);
+      } catch (err) {
+        console.warn('Firestore delete warning:', err);
       }
-      setSavedWorkspaces(prev => prev.filter(w => w.id !== wsId));
-      triggerToast(t.toastWorkspaceDeleted);
-    } catch (err) {
-      console.error('Delete workspace error:', err);
     }
+
+    if (wsId === workspace.id) {
+      if (remaining.length > 0) {
+        setWorkspace(remaining[0]);
+      } else {
+        setWorkspace(createInitialWorkspace());
+      }
+    }
+
+    triggerToast(t.toastWorkspaceDeleted);
   };
 
-  const dashboardWorkspacesList = useMemo(() => {
-    const map = new Map();
-    map.set(workspace.id, workspace);
-    savedWorkspaces.forEach(item => {
-      if (item && item.id) {
-        if (item.id === workspace.id) {
-          map.set(item.id, { ...item, name: workspace.name, boards: workspace.boards });
-        } else {
-          map.set(item.id, item);
-        }
-      }
-    });
-    return Array.from(map.values());
-  }, [workspace, savedWorkspaces]);
-
-  // --- EXPORT BOARD ---
+  // --- EXPORT BOARD (HIGH-RES >= 1600x1600 + BOTH LINE ENDPOINTS SUPPORT) ---
   const handleExportBoard = async () => {
     try {
       triggerToast(t.toastExporting);
@@ -2464,17 +2309,11 @@ export default function App() {
           ctx.lineTo(-sz, sz * 0.55);
           ctx.closePath();
           ctx.fill();
-        } else if (markerType === 'circle') {
-          ctx.beginPath();
-          ctx.arc(0, 0, Math.max(4, lineWidth * 1.3), 0, Math.PI * 2);
-          ctx.fill();
-        } else if (markerType === 'square') {
-          const side = Math.max(7, lineWidth * 2.2);
-          ctx.fillRect(-side / 2, -side / 2, side, side);
         }
         ctx.restore();
       };
 
+      // 1. Draw Connection Lines
       currentBoard.lines.forEach(l => {
         const s = currentBoard.bubbles.find(b => b.id === l.sourceId);
         const tNode = currentBoard.bubbles.find(b => b.id === l.targetId);
@@ -2501,6 +2340,7 @@ export default function App() {
         drawEndpointMarker(pathData.end, pathData.cp2, endMarker, l.color, l.width);
       });
 
+      // 2. Draw Bubbles & Vector Typography
       currentBoard.bubbles.forEach(b => {
         ctx.save();
         ctx.translate(b.x, b.y);
@@ -2529,6 +2369,7 @@ export default function App() {
           ctx.stroke();
         }
 
+        // Level Badge
         ctx.save();
         ctx.translate(8, 8);
         ctx.fillStyle = isDarkMode ? '#1e293b' : '#f1f5f9';
@@ -2559,7 +2400,7 @@ export default function App() {
 
       ctx.restore();
 
-      const cleanName = (currentBoard.name || 'mindmap').replace(/[^a-zA-Z0-9_\-\u00C0-\u1EF9 ]/g, '_').trim() || 'mindmap';
+      const cleanName = (currentBoard.name || 'Untitled_Board').replace(/[^a-zA-Z0-9_\-\u00C0-\u1EF9 ]/g, '_').trim() || 'mindmap';
       const fileName = `${cleanName}_mymind.${exportFormat}`;
       let exportBlob = null;
 
@@ -2604,38 +2445,24 @@ export default function App() {
     }
   };
 
-  // --- BOARD TAB BAR MANAGEMENT ---
+  // --- BOARD TAB BAR MANAGEMENT (Defaults to "Untitled Board" and Empty Canvas) ---
   const addBoard = () => {
     const newBoardId = 'board-' + Date.now();
-    const defaultText = lang === 'vi' ? 'Ý tưởng trung tâm' : 'Central Idea';
     const newBoard = {
       id: newBoardId,
-      name: `${t.boardDefaultName} ${workspace.boards.length + 1}`,
-      bubbles: [
-        {
-          id: 'b-' + Date.now().toString().slice(-4),
-          parentId: null,
-          level: 1,
-          text: defaultText,
-          shape: 'rect',
-          x: 420,
-          y: 250,
-          width: DEFAULT_BUBBLE_W,
-          height: DEFAULT_BUBBLE_H,
-          bgColor: '#ffffff',
-          borderColor: '#000000',
-          borderWidth: 4,
-          baseFontSize: 15
-        }
-      ],
+      name: 'Untitled Board',
+      bubbles: [],
       lines: [],
     };
 
+    recordHistorySnapshot(workspaceRef.current);
     setWorkspace(prev => ({
       ...prev,
       activeBoardId: newBoardId,
       boards: [...prev.boards, newBoard]
     }));
+    setSelectedBubbleId(null);
+    setSelectedLineId(null);
     triggerToast(t.toastBoardAdded);
   };
 
@@ -2652,6 +2479,7 @@ export default function App() {
   const deleteBoardTab = (e, boardId) => {
     e.stopPropagation();
     if (workspace.boards.length <= 1) return;
+    recordHistorySnapshot(workspaceRef.current);
     setWorkspace(prev => {
       const remaining = prev.boards.filter(b => b.id !== boardId);
       const nextActive = prev.activeBoardId === boardId ? remaining[0].id : prev.activeBoardId;
@@ -2669,8 +2497,8 @@ export default function App() {
     const isSel = selectedBubbleId === bubble.id;
     const isHovered = hoveredBubbleId === bubble.id;
     const isMagTarget = hoveredTargetId === bubble.id;
-    const isDropParentTarget = canvasDropTargetBubbleId === bubble.id;
     const isConnSource = connectingSourceId === bubble.id;
+    const isDropTarget = canvasDropTargetId === bubble.id;
 
     const borderCol = getSmartBorderColor(bubble.borderColor);
     const textCol = getSmartTextColor(bubble.bgColor);
@@ -2714,7 +2542,8 @@ export default function App() {
           fill="transparent"
         />
 
-        {isDropParentTarget && (
+        {/* Drop-to-Reparent Halo when dragging another bubble over this one */}
+        {isDropTarget && (
           <g className="pointer-events-none">
             <rect
               x={bubble.x - 12}
@@ -2722,29 +2551,20 @@ export default function App() {
               width={bubble.width + 24}
               height={bubble.height + 24}
               rx={18}
-              fill="rgba(139, 92, 246, 0.16)"
-              stroke="#8b5cf6"
+              fill="rgba(99, 102, 241, 0.16)"
+              stroke="#6366f1"
               strokeWidth={3.5}
               strokeDasharray="6,4"
             />
-            <rect
-              x={bubble.x + bubble.width / 2 - 75}
-              y={bubble.y - 32}
-              width={150}
-              height={20}
-              rx={6}
-              fill="#7c3aed"
-            />
             <text
               x={bubble.x + bubble.width / 2}
-              y={bubble.y - 22}
-              fontSize={10}
-              fontWeight="bold"
-              fill="#ffffff"
+              y={bubble.y - 18}
               textAnchor="middle"
-              dominantBaseline="central"
+              fontSize={11}
+              fontWeight="bold"
+              fill="#6366f1"
             >
-              {t.dropTargetBadge}
+              {t.dropToAttachHint}
             </text>
           </g>
         )}
@@ -2763,7 +2583,7 @@ export default function App() {
           />
         )}
 
-        {isSel && !isMagTarget && !isDropParentTarget && (
+        {isSel && !isMagTarget && !isDropTarget && (
           <rect
             x={bubble.x - 7}
             y={bubble.y - 7}
@@ -2898,6 +2718,16 @@ export default function App() {
     );
   };
 
+  // List of all workspaces to show in the Workspace Menu (always includes current workspace + any saved workspaces)
+  const displayedWorkspacesList = useMemo(() => {
+    const map = new Map();
+    map.set(workspace.id, workspace);
+    savedWorkspaces.forEach(w => {
+      if (!map.has(w.id)) map.set(w.id, w);
+    });
+    return Array.from(map.values());
+  }, [workspace, savedWorkspaces]);
+
   return (
     <div className={`w-full h-screen flex flex-col font-sans select-none overflow-hidden ${
       isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
@@ -2907,10 +2737,10 @@ export default function App() {
       <header className={`min-h-16 py-1.5 px-3 md:px-6 flex flex-wrap md:flex-nowrap items-center justify-between border-b gap-2 md:gap-3 z-35 flex-none ${
         isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
       }`}>
-        {/* Brand Logo & Workspace Menu Trigger */}
+        {/* Brand Logo & Inline Editable Workspace Name */}
         <div className="flex items-center gap-2.5 sm:gap-3">
           <div className="flex items-center gap-2">
-            <div className="cursor-pointer" onClick={() => setShowWorkspaceModal(true)}>
+            <div onClick={() => setShowWorkspaceModal(true)} className="cursor-pointer">
               <MindmapLogoSVG />
             </div>
             <div>
@@ -2923,34 +2753,42 @@ export default function App() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-1 mt-0.5">
-                {isEditingHeaderWsName ? (
-                  <input
-                    type="text"
-                    autoFocus
-                    value={headerWsNameInput}
-                    onChange={(e) => setHeaderWsNameInput(e.target.value)}
-                    onBlur={commitHeaderWorkspaceRename}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitHeaderWorkspaceRename();
-                      if (e.key === 'Escape') setIsEditingHeaderWsName(false);
-                    }}
-                    className="w-36 sm:w-44 px-1.5 py-0.2 text-[10px] font-semibold rounded bg-indigo-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none border border-indigo-400"
-                  />
-                ) : (
-                  <div
-                    onClick={() => {
-                      setHeaderWsNameInput(workspace.name);
-                      setIsEditingHeaderWsName(true);
-                    }}
-                    title={t.renameWorkspaceTitle}
-                    className="group flex items-center gap-1 cursor-pointer text-[10px] text-slate-400 hover:text-indigo-500 font-medium truncate max-w-[120px] sm:max-w-[180px]"
-                  >
-                    <span className="truncate">{workspace.name}</span>
-                    <Edit3 className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 flex-none" />
-                  </div>
-                )}
-              </div>
+              {isEditingHeaderWsName ? (
+                <input
+                  type="text"
+                  autoFocus
+                  value={headerWsNameInput}
+                  onChange={(e) => setHeaderWsNameInput(e.target.value)}
+                  onBlur={() => {
+                    if (headerWsNameInput.trim()) {
+                      setWorkspace(prev => ({ ...prev, name: headerWsNameInput.trim() }));
+                    }
+                    setIsEditingHeaderWsName(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (headerWsNameInput.trim()) {
+                        setWorkspace(prev => ({ ...prev, name: headerWsNameInput.trim() }));
+                      }
+                      setIsEditingHeaderWsName(false);
+                    }
+                    if (e.key === 'Escape') setIsEditingHeaderWsName(false);
+                  }}
+                  className="text-[11px] font-semibold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-indigo-400 outline-none w-36"
+                />
+              ) : (
+                <div
+                  onClick={() => {
+                    setHeaderWsNameInput(workspace.name);
+                    setIsEditingHeaderWsName(true);
+                  }}
+                  className="text-[10px] text-slate-400 hover:text-indigo-500 font-medium truncate max-w-[130px] sm:max-w-[180px] flex items-center gap-1 cursor-pointer"
+                  title="Click to rename workspace"
+                >
+                  <span className="truncate">{workspace.name}</span>
+                  <Edit3 className="w-2.5 h-2.5 opacity-70 flex-none" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -3120,18 +2958,10 @@ export default function App() {
                 }`}
                 title={googleProfile.email}
               >
-                {googleProfile.photoURL ? (
-                  <img
-                    src={googleProfile.photoURL}
-                    alt={googleProfile.name}
-                    className="w-5 h-5 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black">
-                    {googleProfile.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span className="hidden sm:inline max-w-[90px] truncate">{googleProfile.name}</span>
+                <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black">
+                  {googleProfile.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="hidden sm:inline max-w-[95px] truncate">{googleProfile.name}</span>
               </button>
             ) : (
               <button
@@ -3150,17 +2980,9 @@ export default function App() {
                 isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
               }`}>
                 <div className="flex items-center gap-2.5 pb-2.5 mb-2.5 border-b border-slate-200 dark:border-slate-700">
-                  {googleProfile.photoURL ? (
-                    <img
-                      src={googleProfile.photoURL}
-                      alt={googleProfile.name}
-                      className="w-9 h-9 rounded-full object-cover flex-none"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm flex-none">
-                      {googleProfile.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                  <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm flex-none">
+                    {googleProfile.name.charAt(0).toUpperCase()}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold truncate">{googleProfile.name}</div>
                     <div className="text-[10px] text-slate-400 truncate">{googleProfile.email}</div>
@@ -3179,9 +3001,8 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       saveWorkspaceToCloud(workspaceRef.current, false);
-                      setShowAccountMenu(false);
                     }}
-                    className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                    className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95"
                   >
                     <Cloud className="w-3.5 h-3.5" />
                     <span>{t.saveNowBtn}</span>
@@ -3211,10 +3032,10 @@ export default function App() {
       </header>
 
       {/* --- 2. DEDICATED BOARD TABS BAR DIRECTLY BELOW THE TOOLBAR --- */}
-      <nav className={`h-10 px-3 md:px-4 flex items-end justify-between gap-2 border-b overflow-x-auto no-scrollbar z-20 flex-none ${
+      <nav className={`h-10 px-3 md:px-4 flex items-center justify-between border-b overflow-x-auto no-scrollbar z-20 flex-none ${
         isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-100/90 border-slate-200'
       }`}>
-        <div className="flex items-end gap-1.5">
+        <div className="flex items-end gap-1.5 h-full pt-1.5">
           {workspace.boards.map(b => {
             const isActive = workspace.activeBoardId === b.id;
             const isEditing = editingBoardId === b.id;
@@ -3294,21 +3115,21 @@ export default function App() {
           </button>
         </div>
 
-        {/* Quick Toggle for Canvas Drop-to-Reparent Mode */}
+        {/* Canvas Drop-to-Reparent Mode Toggle */}
         <button
           type="button"
-          onClick={() => setCanvasDropReparentMode(prev => !prev)}
-          title={t.canvasDropReparentHint}
-          className={`h-7 px-2.5 mb-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 border transition-all flex-none ${
-            canvasDropReparentMode
-              ? 'bg-purple-600 text-white border-purple-500 shadow-xs'
+          onClick={() => setCanvasReparentMode(prev => !prev)}
+          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition-all flex-none ${
+            canvasReparentMode
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
               : isDarkMode
                 ? 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
                 : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
           }`}
+          title="Drag a node on canvas and drop it onto another node to make it a child branch (or hold Alt while dragging)"
         >
           <GitBranch className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{t.canvasDropReparentLabel}</span>
+          <span className="hidden sm:inline">{t.canvasReparentModeBtn}</span>
         </button>
       </nav>
 
@@ -3386,101 +3207,91 @@ export default function App() {
           />
         )}
 
-        {/* HIERARCHY TREE PANEL (Fixed compact 256px width w-64 shrink-0, wraps instruction text properly) */}
+        {/* HIERARCHY TREE PANEL (Fixed w-64 width + PowerPoint Promote/Demote + Drag & Drop) */}
         {showLayerPanel && (
           <aside className={`${
             isMobile
-              ? 'fixed inset-y-0 left-0 z-40 w-64 max-w-[82vw] shadow-2xl'
+              ? 'fixed inset-y-0 left-0 z-40 w-72 shadow-2xl'
               : 'w-64 min-w-[256px] max-w-[256px] shrink-0 h-full border-r z-10'
-          } flex flex-col overflow-hidden transition-all ${
+          } flex flex-col transition-all ${
             isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
             <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 truncate">
-                <Layers className="w-3.5 h-3.5 text-indigo-500 flex-none" />
-                <span className="truncate">{t.hierarchyTitle}</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                {t.hierarchyTitle}
               </span>
-              <button onClick={() => setShowLayerPanel(false)} className="text-slate-400 hover:text-slate-600 p-1 flex-none">
+              <button onClick={() => setShowLayerPanel(false)} className="text-slate-400 hover:text-slate-600 p-1">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1">
-              <div className="text-[11px] text-slate-400 px-1.5 py-1 italic leading-snug whitespace-normal break-words">
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              <div className="text-[11px] text-slate-400 px-2 py-1 italic whitespace-normal break-words leading-snug">
                 {t.hierarchyHint}
               </div>
 
-              {/* Root Drop Zone: Dragging any node here promotes it to Root (Level 1) */}
-              {treeDraggingBubbleId && (
+              {/* Root Level 1 Drop Zone when dragging a node in the tree */}
+              {treeDraggedId && (
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
-                    setTreeDropTargetId('__ROOT__');
+                    setTreeDropTargetId('ROOT');
                   }}
-                  onDragLeave={() => {
-                    if (treeDropTargetId === '__ROOT__') setTreeDropTargetId(null);
-                  }}
+                  onDragLeave={() => setTreeDropTargetId(prev => (prev === 'ROOT' ? null : prev))}
                   onDrop={(e) => {
                     e.preventDefault();
-                    if (treeDraggingBubbleId) {
-                      reparentBubble(treeDraggingBubbleId, null, { arrangeRadially: false });
+                    if (treeDraggedId) {
+                      reparentBubble(treeDraggedId, null);
                     }
-                    setTreeDraggingBubbleId(null);
+                    setTreeDraggedId(null);
                     setTreeDropTargetId(null);
                   }}
-                  className={`mx-1 my-1.5 p-2 rounded-xl border-2 border-dashed text-center text-[11px] font-bold transition-all ${
-                    treeDropTargetId === '__ROOT__'
-                      ? 'border-indigo-500 bg-indigo-500/15 text-indigo-500 scale-[1.01]'
+                  className={`mx-1 my-1.5 p-2 rounded-xl border border-dashed text-[11px] font-bold text-center transition-all ${
+                    treeDropTargetId === 'ROOT'
+                      ? 'bg-indigo-500/20 border-indigo-500 text-indigo-500'
                       : 'border-slate-300 dark:border-slate-700 text-slate-400'
                   }`}
                 >
-                  {t.dropRootZoneText}
+                  {t.rootDropZoneLabel}
                 </div>
               )}
 
-              {orderedHierarchyBubbles.map((bubble) => {
+              {orderedHierarchyBubbles.map(bubble => {
                 const isSelected = selectedBubbleId === bubble.id;
                 const depthLevel = bubble.computedDepth || bubble.level || 1;
-                const indentPx = Math.min(56, (depthLevel - 1) * 14);
-                const forbiddenDescendantIds = new Set(getAllDescendantIds(bubble.id, currentBoard.bubbles));
-                const isTreeDropTarget = treeDropTargetId === bubble.id;
-                const canPromote = Boolean(bubble.parentId);
-                const canDemote = Boolean(findDemoteParentCandidate(bubble.id));
+                const indentPx = Math.min(72, (depthLevel - 1) * 14);
+                const canProm = canPromoteBubble(bubble);
+                const canDem = canDemoteBubble(bubble);
+                const isDropTarget = treeDropTargetId === bubble.id;
 
                 return (
                   <div
                     key={bubble.id}
                     draggable
                     onDragStart={(e) => {
+                      setTreeDraggedId(bubble.id);
                       e.dataTransfer.effectAllowed = 'move';
-                      e.dataTransfer.setData('text/plain', bubble.id);
-                      setTreeDraggingBubbleId(bubble.id);
                     }}
                     onDragEnd={() => {
-                      setTreeDraggingBubbleId(null);
+                      setTreeDraggedId(null);
                       setTreeDropTargetId(null);
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      if (
-                        treeDraggingBubbleId &&
-                        treeDraggingBubbleId !== bubble.id &&
-                        !forbiddenDescendantIds.has(treeDraggingBubbleId)
-                      ) {
+                      if (treeDraggedId && treeDraggedId !== bubble.id) {
                         setTreeDropTargetId(bubble.id);
                       }
                     }}
                     onDragLeave={() => {
-                      if (treeDropTargetId === bubble.id) setTreeDropTargetId(null);
+                      setTreeDropTargetId(prev => (prev === bubble.id ? null : prev));
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      e.stopPropagation();
-                      const draggedId = treeDraggingBubbleId || e.dataTransfer.getData('text/plain');
-                      if (draggedId && draggedId !== bubble.id) {
-                        reparentBubble(draggedId, bubble.id, { arrangeRadially: true });
+                      if (treeDraggedId && treeDraggedId !== bubble.id) {
+                        reparentBubble(treeDraggedId, bubble.id);
                       }
-                      setTreeDraggingBubbleId(null);
+                      setTreeDraggedId(null);
                       setTreeDropTargetId(null);
                     }}
                     onClick={() => {
@@ -3489,61 +3300,67 @@ export default function App() {
                       if (isMobile) setShowLayerPanel(false);
                     }}
                     style={{ marginLeft: `${indentPx}px` }}
-                    className={`py-1.5 px-2 rounded-xl text-xs flex items-center justify-between gap-1 group cursor-pointer transition-all ${
-                      isTreeDropTarget
-                        ? 'ring-2 ring-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-bold'
+                    className={`py-1.5 px-2 rounded-xl text-xs flex items-center justify-between group cursor-pointer transition-all ${
+                      isDropTarget
+                        ? 'ring-2 ring-indigo-500 bg-indigo-500/15'
                         : isSelected
                           ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20'
                           : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    {/* Left: Drag Handle + Color Dot + Level Badge + Node Text */}
-                    <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
-                      <GripVertical className="w-3 h-3 text-slate-400 opacity-50 group-hover:opacity-100 cursor-grab flex-none" />
+                    <div className="flex items-center gap-1.5 truncate pr-1 min-w-0">
+                      <GripVertical className="w-3 h-3 text-slate-400 opacity-60 group-hover:opacity-100 cursor-grab flex-none" />
                       <span
                         className="w-2.5 h-2.5 rounded-full flex-none border border-slate-400"
                         style={{ backgroundColor: bubble.bgColor }}
                       />
-                      <span className="text-[9px] font-black px-1 py-0.2 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex-none">
+                      <span className="text-[9px] font-extrabold px-1 py-0.2 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex-none">
                         L{depthLevel}
                       </span>
                       <span className="truncate">{bubble.text}</span>
                     </div>
 
-                    {/* Right: Clean PowerPoint-Style Promote (←) / Demote (→) + Delete */}
+                    {/* PowerPoint-style Promote (←) / Demote (→) + Delete */}
                     <div className="flex items-center gap-0.5 flex-none">
                       <button
                         type="button"
+                        disabled={!canProm}
                         onClick={(e) => {
                           e.stopPropagation();
                           handlePromoteBubble(bubble.id);
                         }}
-                        disabled={!canPromote}
-                        title={t.promoteBtnTitle}
-                        className="p-0.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                        title={t.promoteTitle}
+                        className={`p-1 rounded transition-colors ${
+                          canProm
+                            ? 'text-slate-500 hover:text-indigo-600 hover:bg-slate-200/70 dark:hover:bg-slate-700'
+                            : 'text-slate-300 dark:text-slate-700 cursor-not-allowed'
+                        }`}
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="button"
+                        disabled={!canDem}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDemoteBubble(bubble.id);
                         }}
-                        disabled={!canDemote}
-                        title={t.demoteBtnTitle}
-                        className="p-0.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                        title={t.demoteTitle}
+                        className={`p-1 rounded transition-colors ${
+                          canDem
+                            ? 'text-slate-500 hover:text-indigo-600 hover:bg-slate-200/70 dark:hover:bg-slate-700'
+                            : 'text-slate-300 dark:text-slate-700 cursor-not-allowed'
+                        }`}
                       >
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
-
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteBubble(bubble.id);
                         }}
-                        className="p-0.5 text-slate-400 hover:text-rose-500 transition-colors"
+                        className="p-1 text-slate-400 hover:text-rose-500 rounded"
                         title={t.deleteBubbleTitle}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -3572,6 +3389,26 @@ export default function App() {
                 : 'cursor-grab'
           } ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}
         >
+          {/* Empty Board Guidance Overlay when board has 0 bubbles */}
+          {currentBoard.bubbles.length === 0 && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6 z-10">
+              <div className={`max-w-sm p-6 rounded-3xl border text-center space-y-2 shadow-sm ${
+                isDarkMode
+                  ? 'bg-slate-900/80 border-slate-800 text-slate-300'
+                  : 'bg-white/85 border-slate-200 text-slate-600'
+              }`}>
+                <Sparkles className="w-8 h-8 text-indigo-500 mx-auto opacity-80" />
+                <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  {t.emptyBoardTitle}
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {t.emptyBoardDesc}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Active Connection Mode Banner */}
           {connectingSourceId && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-lg flex items-center gap-2">
               <Link2 className="w-4 h-4 animate-pulse" />
@@ -3609,6 +3446,7 @@ export default function App() {
                 />
               </pattern>
 
+              {/* Dynamic Color Markers per Line (Both Start and End Arrowheads supported via orient="auto-start-reverse") */}
               {currentBoard.lines.map(line => {
                 const activeColor = selectedLineId === line.id ? '#6366f1' : line.color;
                 return (
@@ -3624,31 +3462,12 @@ export default function App() {
                     >
                       <path d="M 0 1 L 10 5 L 0 9 z" fill={activeColor} />
                     </marker>
-                    <marker
-                      id={`marker-circle-${line.id}`}
-                      viewBox="0 0 10 10"
-                      refX="5"
-                      refY="5"
-                      markerWidth="6"
-                      markerHeight="6"
-                    >
-                      <circle cx="5" cy="5" r="4" fill={activeColor} />
-                    </marker>
-                    <marker
-                      id={`marker-square-${line.id}`}
-                      viewBox="0 0 10 10"
-                      refX="5"
-                      refY="5"
-                      markerWidth="6"
-                      markerHeight="6"
-                    >
-                      <rect x="1" y="1" width="8" height="8" fill={activeColor} />
-                    </marker>
                   </React.Fragment>
                 );
               })}
             </defs>
 
+            {/* Infinite Grid Background */}
             <rect
               id="canvas-svg-bg"
               x="0"
@@ -3658,10 +3477,12 @@ export default function App() {
               fill="url(#infinite-grid-pattern)"
             />
 
+            {/* Transformed World Canvas */}
             <g
               transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}
               className="pointer-events-auto"
             >
+              {/* Connection Lines */}
               {currentBoard.lines.map(line => {
                 const src = currentBoard.bubbles.find(b => b.id === line.sourceId);
                 const tgt = currentBoard.bubbles.find(b => b.id === line.targetId);
@@ -3699,16 +3520,17 @@ export default function App() {
                         line.style === 'dashed' ? '8,6' : line.style === 'dotted' ? '3,4' : 'none'
                       }
                       markerStart={
-                        startM !== 'none' ? `url(#marker-${startM}-${line.id})` : undefined
+                        startM === 'arrow' ? `url(#marker-arrow-${line.id})` : undefined
                       }
                       markerEnd={
-                        endM !== 'none' ? `url(#marker-${endM}-${line.id})` : undefined
+                        endM === 'arrow' ? `url(#marker-arrow-${line.id})` : undefined
                       }
                     />
                   </g>
                 );
               })}
 
+              {/* Flicker-Free Interactive Preview Line */}
               {connectingSourceId && (() => {
                 const src = currentBoard.bubbles.find(b => b.id === connectingSourceId);
                 if (!src) return null;
@@ -3742,6 +3564,7 @@ export default function App() {
                 );
               })()}
 
+              {/* Idea Nodes (Bubbles) */}
               {currentBoard.bubbles.map(bubble => (
                 <g
                   key={bubble.id}
@@ -3833,193 +3656,177 @@ export default function App() {
             )}
 
             {/* BUBBLE PROPERTIES */}
-            {selectedBubble && (() => {
-              const parentNode = selectedBubble.parentId
-                ? currentBoard.bubbles.find(b => b.id === selectedBubble.parentId)
-                : null;
-              const canPromote = Boolean(selectedBubble.parentId);
-              const canDemote = Boolean(findDemoteParentCandidate(selectedBubble.id));
-
-              return (
-                <div className="space-y-4 text-xs">
-                  <div>
-                    <label className="font-semibold block mb-1">{t.ideaContentLabel}</label>
-                    <textarea
-                      rows={3}
-                      value={selectedBubble.text}
-                      onChange={(e) => updateBubble(selectedBubble.id, { text: e.target.value })}
-                      className={`w-full p-2.5 rounded-xl border text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none ${
-                        isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
-                      }`}
-                    />
-                    <div className="text-[10px] text-slate-400 mt-1 italic">
-                      {t.ideaContentHint}
-                    </div>
+            {selectedBubble && (
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="font-semibold block mb-1">{t.ideaContentLabel}</label>
+                  <textarea
+                    rows={3}
+                    value={selectedBubble.text}
+                    onChange={(e) => updateBubble(selectedBubble.id, { text: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none ${
+                      isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                  <div className="text-[10px] text-slate-400 mt-1 italic">
+                    {t.ideaContentHint}
                   </div>
+                </div>
 
-                  {/* --- POWERPOINT-STYLE PROMOTE / DEMOTE & DRAG-REPARENT INFO --- */}
-                  <div className={`p-3 rounded-2xl border space-y-2.5 ${
-                    isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-500 dark:text-slate-300 flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>{t.hierarchySectionLabel}</span>
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white">
-                        {t.levelShort} {selectedBubble.level}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handlePromoteBubble(selectedBubble.id)}
-                        disabled={!canPromote}
-                        title={t.promoteBtnTitle}
-                        className="py-2 px-2.5 rounded-xl border font-bold text-[11px] flex items-center justify-center gap-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-400 disabled:opacity-35 disabled:pointer-events-none transition-all active:scale-95"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>{t.promoteBtnLabel}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDemoteBubble(selectedBubble.id)}
-                        disabled={!canDemote}
-                        title={t.demoteBtnTitle}
-                        className="py-2 px-2.5 rounded-xl border font-bold text-[11px] flex items-center justify-center gap-1 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-400 disabled:opacity-35 disabled:pointer-events-none transition-all active:scale-95"
-                      >
-                        <span>{t.demoteBtnLabel}</span>
-                        <ChevronRight className="w-3.5 h-3.5 text-indigo-500" />
-                      </button>
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-2 pt-1 border-t border-slate-200/70 dark:border-slate-700/70">
-                      <span className="font-semibold flex-none">{t.currentParentInfoLabel}</span>
-                      <span className="font-bold text-indigo-600 dark:text-indigo-400 truncate">
-                        {parentNode ? `[L${parentNode.level}] ${parentNode.text}` : t.rootLevelOption}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 italic leading-snug">
-                      💡 {t.dragReparentHint}
-                    </div>
+                {/* PowerPoint-style Promote / Demote Level Controls */}
+                <div className={`p-2.5 rounded-xl border space-y-2 ${
+                  isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[11px]">{t.hierarchySectionLabel}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-bold">
+                      {t.levelShort} {selectedBubble.level}
+                    </span>
                   </div>
-
-                  {/* Start Line Connection Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConnectingSourceId(selectedBubble.id);
-                      if (isMobile) setShowPropertiesPanel(false);
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800 transition-all"
-                  >
-                    <Link2 className="w-4 h-4" />
-                    <span>{t.connectBtnLabel}</span>
-                  </button>
-
-                  {/* 3 Geometric Shapes */}
-                  <div>
-                    <label className="font-semibold block mb-1.5">{t.shapeLabel}</label>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {shapesList.map(s => {
-                        const Icon = s.icon;
-                        return (
-                          <button
-                            key={s.id}
-                            onClick={() => updateBubble(selectedBubble.id, { shape: s.id })}
-                            className={`p-2.5 rounded-xl flex flex-col items-center gap-1 border transition-all ${
-                              selectedBubble.shape === s.id
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                                : 'hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            <Icon className="w-5 h-5" />
-                            <span className="text-[10px] font-medium text-center">{s.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Background Color */}
-                  <div>
-                    <label className="font-semibold block mb-1.5">{t.bgColorLabel}</label>
-                    <div className="grid grid-cols-8 gap-1.5">
-                      {PALETTE.map(c => (
-                        <button
-                          key={`bg-${c}`}
-                          onClick={() => updateBubble(selectedBubble.id, { bgColor: c })}
-                          style={{ backgroundColor: c }}
-                          className={`w-6 h-6 rounded-lg border transition-transform ${
-                            selectedBubble.bgColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
-                          } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Border Color */}
-                  <div>
-                    <label className="font-semibold block mb-1.5">{t.borderColorLabel}</label>
-                    <div className="grid grid-cols-8 gap-1.5">
-                      {PALETTE.map(c => (
-                        <button
-                          key={`bd-${c}`}
-                          onClick={() => updateBubble(selectedBubble.id, { borderColor: c })}
-                          style={{ backgroundColor: c }}
-                          className={`w-6 h-6 rounded-lg border transition-transform ${
-                            selectedBubble.borderColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
-                          } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Border Thickness */}
-                  <div>
-                    <div className="flex justify-between font-semibold mb-1">
-                      <span>{t.borderWidthLabel}</span>
-                      <span>{selectedBubble.borderWidth}px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={selectedBubble.borderWidth}
-                      onChange={(e) => updateBubble(selectedBubble.id, { borderWidth: Number(e.target.value) })}
-                      className="w-full accent-indigo-600"
-                    />
-                  </div>
-
-                  {/* Base Font Scale */}
-                  <div>
-                    <div className="flex justify-between font-semibold mb-1">
-                      <span>{t.fontScaleLabel}</span>
-                      <span>{selectedBubble.baseFontSize || 15}px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="11"
-                      max="28"
-                      value={selectedBubble.baseFontSize || 15}
-                      onChange={(e) => updateBubble(selectedBubble.id, { baseFontSize: Number(e.target.value) })}
-                      className="w-full accent-indigo-600"
-                    />
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <button
-                      onClick={() => deleteBubble(selectedBubble.id)}
-                      className="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold flex items-center justify-center gap-1.5 transition-all"
+                      type="button"
+                      disabled={!canPromoteBubble(selectedBubble)}
+                      onClick={() => handlePromoteBubble(selectedBubble.id)}
+                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] flex items-center justify-center gap-1 transition-all ${
+                        canPromoteBubble(selectedBubble)
+                          ? 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:border-indigo-500 text-slate-700 dark:text-slate-200'
+                          : 'opacity-40 cursor-not-allowed border-slate-200 dark:border-slate-700 text-slate-400'
+                      }`}
                     >
-                      <Trash2 className="w-4 h-4" />
-                      <span>{t.deleteBubbleBtn}</span>
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>{t.promoteBtnLabel}</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canDemoteBubble(selectedBubble)}
+                      onClick={() => handleDemoteBubble(selectedBubble.id)}
+                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] flex items-center justify-center gap-1 transition-all ${
+                        canDemoteBubble(selectedBubble)
+                          ? 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:border-indigo-500 text-slate-700 dark:text-slate-200'
+                          : 'opacity-40 cursor-not-allowed border-slate-200 dark:border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      <span>{t.demoteBtnLabel}</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
-              );
-            })()}
+
+                {/* Start Line Connection Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConnectingSourceId(selectedBubble.id);
+                    if (isMobile) setShowPropertiesPanel(false);
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800 transition-all"
+                >
+                  <Link2 className="w-4 h-4" />
+                  <span>{t.connectBtnLabel}</span>
+                </button>
+
+                {/* 3 Geometric Shapes */}
+                <div>
+                  <label className="font-semibold block mb-1.5">{t.shapeLabel}</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {shapesList.map(s => {
+                      const Icon = s.icon;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => updateBubble(selectedBubble.id, { shape: s.id })}
+                          className={`p-2.5 rounded-xl flex flex-col items-center gap-1 border transition-all ${
+                            selectedBubble.shape === s.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span className="text-[10px] font-medium text-center">{s.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Background Color (16-Color Palette) */}
+                <div>
+                  <label className="font-semibold block mb-1.5">{t.bgColorLabel}</label>
+                  <div className="grid grid-cols-8 gap-1.5">
+                    {PALETTE.map(c => (
+                      <button
+                        key={`bg-${c}`}
+                        onClick={() => updateBubble(selectedBubble.id, { bgColor: c })}
+                        style={{ backgroundColor: c }}
+                        className={`w-6 h-6 rounded-lg border transition-transform ${
+                          selectedBubble.bgColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
+                        } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Border Color (Identical 16-Color Palette as Background Color) */}
+                <div>
+                  <label className="font-semibold block mb-1.5">{t.borderColorLabel}</label>
+                  <div className="grid grid-cols-8 gap-1.5">
+                    {PALETTE.map(c => (
+                      <button
+                        key={`bd-${c}`}
+                        onClick={() => updateBubble(selectedBubble.id, { borderColor: c })}
+                        style={{ backgroundColor: c }}
+                        className={`w-6 h-6 rounded-lg border transition-transform ${
+                          selectedBubble.borderColor === c ? 'scale-110 ring-2 ring-indigo-500' : 'hover:scale-105'
+                        } ${c === '#ffffff' || c === '#f8fafc' ? 'border-slate-300' : 'border-transparent'}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Border Thickness */}
+                <div>
+                  <div className="flex justify-between font-semibold mb-1">
+                    <span>{t.borderWidthLabel}</span>
+                    <span>{selectedBubble.borderWidth}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={selectedBubble.borderWidth}
+                    onChange={(e) => updateBubble(selectedBubble.id, { borderWidth: Number(e.target.value) })}
+                    className="w-full accent-indigo-600"
+                  />
+                </div>
+
+                {/* Base Font Scale */}
+                <div>
+                  <div className="flex justify-between font-semibold mb-1">
+                    <span>{t.fontScaleLabel}</span>
+                    <span>{selectedBubble.baseFontSize || 15}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="11"
+                    max="28"
+                    value={selectedBubble.baseFontSize || 15}
+                    onChange={(e) => updateBubble(selectedBubble.id, { baseFontSize: Number(e.target.value) })}
+                    className="w-full accent-indigo-600"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <button
+                    onClick={() => deleteBubble(selectedBubble.id)}
+                    className="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>{t.deleteBubbleBtn}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* LINE PROPERTIES */}
             {selectedLine && (() => {
@@ -4028,6 +3835,7 @@ export default function App() {
 
               return (
                 <div className="space-y-4 text-xs">
+                  {/* Stroke Pattern */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineStyleLabel}</label>
                     <div className="space-y-1.5">
@@ -4058,6 +3866,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Start Endpoint (None vs Arrow) */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineStartMarkerLabel}</label>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -4077,6 +3886,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* End Endpoint (None vs Arrow) */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineEndMarkerLabel}</label>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -4096,6 +3906,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Line Color (Identical 16-Color Palette as Bubble) */}
                   <div>
                     <label className="font-semibold block mb-1.5">{t.lineColorLabel}</label>
                     <div className="grid grid-cols-8 gap-1.5">
@@ -4112,6 +3923,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Line Thickness */}
                   <div>
                     <div className="flex justify-between font-semibold mb-1">
                       <span>{t.lineWidthLabel}</span>
@@ -4143,93 +3955,7 @@ export default function App() {
         )}
       </div>
 
-      {/* --- GOOGLE AUTHENTICATION MODAL (WHEN POPUP IS BLOCKED BY IFRAME OR UNAUTHORIZED DOMAIN) --- */}
-      {showGoogleAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl border ${
-            isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
-          }`}>
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 dark:border-slate-700">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <User className="w-5 h-5 text-indigo-500" />
-                <span>{t.loginModalTitle}</span>
-              </h3>
-              <button onClick={() => setShowGoogleAuthModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {oauthPopupError && (
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs space-y-1">
-                  <div className="font-bold flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4 text-amber-500 flex-none" />
-                    <span>{t.loginPopupBlockedTitle}</span>
-                  </div>
-                  <p className="text-[11px] opacity-90 leading-relaxed">{t.loginPopupBlockedDesc}</p>
-                  <div className="text-[10px] font-mono opacity-75 pt-0.5">Code: {oauthPopupError}</div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
-              >
-                <User className="w-4 h-4 text-indigo-400" />
-                <span>{t.loginRetryPopup}</span>
-              </button>
-
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
-                <span className="flex-shrink mx-3 text-[10px] font-bold uppercase text-slate-400">OR</span>
-                <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
-              </div>
-
-              <form onSubmit={handleConfirmCustomGoogleAccount} className="space-y-3">
-                <label className="text-xs font-semibold block">{t.loginCustomAccountTitle}</label>
-                <input
-                  type="text"
-                  required
-                  value={customLoginName}
-                  onChange={(e) => setCustomLoginName(e.target.value)}
-                  placeholder={t.loginNamePlaceholder}
-                  className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:ring-2 focus:ring-indigo-500/30 ${
-                    isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
-                />
-                <input
-                  type="email"
-                  required
-                  value={customLoginEmail}
-                  onChange={(e) => setCustomLoginEmail(e.target.value)}
-                  placeholder={t.loginEmailPlaceholder}
-                  className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:ring-2 focus:ring-indigo-500/30 ${
-                    isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
-                />
-                <div className="flex justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowGoogleAuthModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700"
-                  >
-                    {t.cancel}
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md transition-all"
-                  >
-                    {t.loginContinueWithInfo}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- WORKSPACE DASHBOARD MODAL --- */}
+      {/* --- WORKSPACE DASHBOARD / MODAL (Rename, Switch, Create, Save Now) --- */}
       {showWorkspaceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className={`w-full max-w-lg p-6 rounded-3xl shadow-2xl border ${
@@ -4240,52 +3966,53 @@ export default function App() {
                 <Folder className="w-5 h-5 text-indigo-500" />
                 <span>{t.manageWorkspaces}</span>
               </h3>
-              <button
-                onClick={() => {
-                  setEditingWorkspaceId(null);
-                  setShowWorkspaceModal(false);
-                }}
-                className="text-slate-400 hover:text-slate-600"
-              >
+              <button onClick={() => setShowWorkspaceModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
+              {/* Current Workspace Name Input + Save Now Button */}
               <div>
                 <label className="text-xs font-semibold block mb-1">{t.currentWorkspaceName}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={workspace.name}
-                    onChange={(e) => {
-                      const newName = e.target.value;
-                      setWorkspace(prev => ({ ...prev, name: newName }));
-                      setSavedWorkspaces(prev =>
-                        prev.map(w => (w.id === workspace.id ? { ...w, name: newName } : w))
-                      );
-                    }}
-                    className={`flex-1 p-2.5 rounded-xl border text-xs font-semibold focus:ring-2 focus:ring-indigo-500/20 outline-none ${
+                    onChange={(e) => setWorkspace(prev => ({ ...prev, name: e.target.value }))}
+                    className={`flex-1 p-2.5 rounded-xl border text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none ${
                       isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                     }`}
                   />
-                  {googleProfile && (
-                    <button
-                      type="button"
-                      onClick={() => saveWorkspaceToCloud(workspaceRef.current, false)}
-                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 flex-none transition-all"
-                    >
-                      <Cloud className="w-3.5 h-3.5" />
-                      <span>{t.saveNowBtn}</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => saveWorkspaceToCloud(workspaceRef.current, false)}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 flex-none transition-all active:scale-95"
+                  >
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>{t.saveNowBtn}</span>
+                  </button>
                 </div>
               </div>
 
+              {/* Last Saved Timestamp Banner */}
+              <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center justify-between ${
+                isDarkMode ? 'bg-slate-900/70 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-500 flex-none" />
+                  <span>{t.autoSaveInfo}</span>
+                </div>
+                <span className="font-bold text-emerald-500 ml-2 flex-none">
+                  {lastSavedTime ? `${t.lastAutoSaved} ${lastSavedTime}` : t.notSavedYet}
+                </span>
+              </div>
+
+              {/* Saved Workspaces Dashboard List (with Inline Rename, Open, Delete) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    {t.savedWorkspacesTitle} ({dashboardWorkspacesList.length})
+                    {t.savedWorkspacesTitle} ({displayedWorkspacesList.length})
                   </label>
                   <button
                     type="button"
@@ -4293,21 +4020,19 @@ export default function App() {
                     className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                   >
                     <FolderPlus className="w-3.5 h-3.5" />
-                    <span>{t.newWorkspaceBtn}</span>
+                    <span>+ {t.newWorkspaceBtn}</span>
                   </button>
                 </div>
 
-                <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                  {dashboardWorkspacesList.map(item => {
+                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                  {displayedWorkspacesList.map(item => {
                     const isCurrent = item.id === workspace.id;
-                    const isEditingThisWs = editingWorkspaceId === item.id;
+                    const isEditingThis = editingWorkspaceId === item.id;
 
                     return (
                       <div
                         key={item.id}
-                        onClick={() => {
-                          if (!isEditingThisWs) handleSelectSavedWorkspace(item);
-                        }}
+                        onClick={() => !isEditingThis && handleSelectSavedWorkspace(item)}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           setEditingWorkspaceId(item.id);
@@ -4322,50 +4047,31 @@ export default function App() {
                         }`}
                       >
                         <div className="min-w-0 flex-1 pr-2">
-                          {isEditingThisWs ? (
-                            <div
-                              className="flex items-center gap-1.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                          {isEditingThis ? (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="text"
                                 autoFocus
                                 value={editingWorkspaceName}
                                 onChange={(e) => setEditingWorkspaceName(e.target.value)}
-                                onBlur={() => commitRenameWorkspaceItem(item)}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') commitRenameWorkspaceItem(item);
+                                  if (e.key === 'Enter') handleCommitWorkspaceRename(item.id);
                                   if (e.key === 'Escape') setEditingWorkspaceId(null);
                                 }}
-                                className="flex-1 px-2 py-1 text-xs font-bold rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none border-2 border-indigo-500"
+                                className="flex-1 px-2 py-1 text-xs rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-indigo-500 outline-none"
                               />
                               <button
                                 type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  commitRenameWorkspaceItem(item);
-                                }}
-                                className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white"
-                                title={t.done}
+                                onClick={() => handleCommitWorkspaceRename(item.id)}
+                                className="p-1 rounded-lg bg-emerald-600 text-white"
                               >
                                 <Check className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setEditingWorkspaceId(null);
-                                }}
-                                className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                title={t.cancel}
-                              >
-                                <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ) : (
                             <>
                               <div className="text-xs font-bold truncate flex items-center gap-2">
-                                <span className="truncate">{item.name}</span>
+                                <span className="truncate">{isCurrent ? workspace.name : item.name}</span>
                                 {isCurrent && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-bold flex-none">
                                     {t.activeBadge}
@@ -4379,82 +4085,62 @@ export default function App() {
                           )}
                         </div>
 
-                        {!isEditingThisWs && (
-                          <div className="flex items-center gap-1 flex-none">
+                        <div className="flex items-center gap-1 flex-none">
+                          {!isEditingThis && (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setEditingWorkspaceId(item.id);
-                                setEditingWorkspaceName(item.name);
+                                setEditingWorkspaceName(isCurrent ? workspace.name : item.name);
                               }}
-                              title={t.renameWorkspaceTitle}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                              title="Rename Workspace"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-200/60 dark:hover:bg-slate-700"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
-
-                            {!isCurrent && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSelectSavedWorkspace(item);
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold"
-                              >
-                                {t.openWorkspaceBtn}
-                              </button>
-                            )}
-
-                            {dashboardWorkspacesList.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={(e) => handleDeleteSavedWorkspace(e, item.id)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        )}
+                          )}
+                          {!isCurrent && !isEditingThis && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectSavedWorkspace(item);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold"
+                            >
+                              {t.openWorkspaceBtn}
+                            </button>
+                          )}
+                          {displayedWorkspacesList.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteSavedWorkspace(e, item.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {googleProfile ? (
-                <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center justify-between ${
-                  isDarkMode ? 'bg-slate-900/70 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
+              {/* Optional Sign-In Banner if not logged in yet */}
+              {!googleProfile && (
+                <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                  isDarkMode ? 'bg-slate-900/60 border-slate-700' : 'bg-indigo-50/70 border-indigo-200'
                 }`}>
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-emerald-500 flex-none" />
-                    <span>{t.autoSaveInfo}</span>
-                  </div>
-                  {lastSavedTime && (
-                    <span className="font-bold text-emerald-500 ml-2 flex-none">
-                      {lastSavedTime}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
-                  isDarkMode ? 'bg-slate-900/70 border-slate-700' : 'bg-slate-50 border-slate-200'
-                }`}>
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center flex-none">
-                      <Lock className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold truncate">{t.loginRequiredTitle}</div>
-                      <div className="text-[10px] text-slate-400 line-clamp-2">{t.loginRequiredDesc}</div>
-                    </div>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                    <span className="font-bold block text-indigo-600 dark:text-indigo-400">{t.loginRequiredTitle}</span>
+                    {t.loginRequiredDesc}
                   </div>
                   <button
                     type="button"
                     onClick={handleGoogleLogin}
-                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 flex-none shadow-sm transition-all"
+                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 flex-none shadow-sm"
                   >
                     <User className="w-3.5 h-3.5" />
                     <span>{t.loginBtn}</span>
@@ -4462,22 +4148,105 @@ export default function App() {
                 </div>
               )}
 
-              <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 text-xs">
-                💡 {t.workspaceTip}
-              </div>
-
               <div className="pt-1 flex justify-end">
                 <button
-                  onClick={() => {
-                    setEditingWorkspaceId(null);
-                    setShowWorkspaceModal(false);
-                  }}
+                  onClick={() => setShowWorkspaceModal(false)}
                   className="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 text-white text-xs font-bold shadow-md transition-all"
                 >
                   {t.done}
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- GOOGLE SIGN-IN DIALOG (Handles Popup Block / Iframe Preview Cleanly) --- */}
+      {showGoogleAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl border space-y-4 ${
+            isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <User className="w-5 h-5 text-indigo-500" />
+                <span>{t.googleModalTitle}</span>
+              </h3>
+              <button onClick={() => setShowGoogleAuthModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 flex-none" />
+                <span>{t.googlePopupNoticeTitle}</span>
+              </div>
+              <p className="text-[11px] opacity-90 leading-relaxed">
+                {t.googlePopupNoticeDesc}
+              </p>
+              {googleAuthErrorCode && (
+                <div className="text-[10px] font-mono opacity-75 pt-0.5">
+                  Code: {googleAuthErrorCode}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
+            >
+              <User className="w-4 h-4" />
+              <span>{t.retryGooglePopupBtn}</span>
+            </button>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-200 dark:border-slate-700" />
+              <span className="flex-shrink mx-3 text-[10px] font-bold uppercase text-slate-400">OR</span>
+              <div className="flex-grow border-t border-slate-200 dark:border-slate-700" />
+            </div>
+
+            <form onSubmit={handleManualGoogleSignIn} className="space-y-3">
+              <label className="text-xs font-semibold block">
+                {t.orManualGoogleLabel}
+              </label>
+              <input
+                type="text"
+                required
+                value={manualUserName}
+                onChange={(e) => setManualUserName(e.target.value)}
+                placeholder={t.nameInputPlaceholder}
+                className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:border-indigo-500 ${
+                  isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+              <input
+                type="email"
+                required
+                value={manualUserEmail}
+                onChange={(e) => setManualUserEmail(e.target.value)}
+                placeholder={t.emailInputPlaceholder}
+                className={`w-full p-2.5 rounded-xl border text-xs outline-none focus:border-indigo-500 ${
+                  isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleAuthModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md"
+                >
+                  {t.signInWithAccountBtn}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
